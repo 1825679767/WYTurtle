@@ -1102,6 +1102,16 @@ int LuaRegisterCreatureEvent(lua_State* state)
     return RegisterEntryEvent(state, &TurtleLuaEngine::RegisterCreatureEvent);
 }
 
+int LuaRegisterMapEvent(lua_State* state)
+{
+    return RegisterEntryEvent(state, &TurtleLuaEngine::RegisterMapEvent);
+}
+
+int LuaRegisterInstanceEvent(lua_State* state)
+{
+    return RegisterEntryEvent(state, &TurtleLuaEngine::RegisterInstanceEvent);
+}
+
 int LuaRegisterUniqueCreatureEvent(lua_State* state)
 {
     auto* engine = GetEngine(state);
@@ -1233,6 +1243,16 @@ int LuaClearEntryEvent(lua_State* state, void (TurtleLuaEngine::*clearer)(uint32
 int LuaClearCreatureEvents(lua_State* state)
 {
     return LuaClearEntryEvent(state, &TurtleLuaEngine::ClearCreatureEvents);
+}
+
+int LuaClearMapEvents(lua_State* state)
+{
+    return LuaClearEntryEvent(state, &TurtleLuaEngine::ClearMapEvents);
+}
+
+int LuaClearInstanceEvents(lua_State* state)
+{
+    return LuaClearEntryEvent(state, &TurtleLuaEngine::ClearInstanceEvents);
 }
 
 int LuaClearUniqueCreatureEvents(lua_State* state)
@@ -15569,6 +15589,8 @@ void TurtleLuaEngine::CloseState()
 
     _serverEvents.clear();
     _playerEvents.clear();
+    _mapEvents.clear();
+    _instanceEvents.clear();
     _creatureEvents.clear();
     _uniqueCreatureEvents.clear();
     _gameObjectEvents.clear();
@@ -15595,6 +15617,8 @@ void TurtleLuaEngine::RegisterGlobals()
     lua_register(_state, "RegisterGroupEvent", &LuaRegisterGroupEvent);
     lua_register(_state, "RegisterGuildEvent", &LuaRegisterGuildEvent);
     lua_register(_state, "RegisterPacketEvent", &LuaRegisterPacketEvent);
+    lua_register(_state, "RegisterMapEvent", &LuaRegisterMapEvent);
+    lua_register(_state, "RegisterInstanceEvent", &LuaRegisterInstanceEvent);
     lua_register(_state, "RegisterCreatureEvent", &LuaRegisterCreatureEvent);
     lua_register(_state, "RegisterUniqueCreatureEvent", &LuaRegisterUniqueCreatureEvent);
     lua_register(_state, "RegisterGameObjectEvent", &LuaRegisterGameObjectEvent);
@@ -15609,6 +15633,8 @@ void TurtleLuaEngine::RegisterGlobals()
     lua_register(_state, "ClearGroupEvents", &LuaClearGroupEvents);
     lua_register(_state, "ClearGuildEvents", &LuaClearGuildEvents);
     lua_register(_state, "ClearPacketEvents", &LuaClearPacketEvents);
+    lua_register(_state, "ClearMapEvents", &LuaClearMapEvents);
+    lua_register(_state, "ClearInstanceEvents", &LuaClearInstanceEvents);
     lua_register(_state, "ClearCreatureEvents", &LuaClearCreatureEvents);
     lua_register(_state, "ClearUniqueCreatureEvents", &LuaClearUniqueCreatureEvents);
     lua_register(_state, "ClearGameObjectEvents", &LuaClearGameObjectEvents);
@@ -18099,6 +18125,16 @@ void TurtleLuaEngine::RegisterGuildEvent(uint32 eventId, int functionRef)
     _guildEvents[eventId].push_back(functionRef);
 }
 
+void TurtleLuaEngine::RegisterMapEvent(uint32 mapId, uint32 eventId, int functionRef)
+{
+    _mapEvents[mapId][eventId].push_back(functionRef);
+}
+
+void TurtleLuaEngine::RegisterInstanceEvent(uint32 instanceId, uint32 eventId, int functionRef)
+{
+    _instanceEvents[instanceId][eventId].push_back(functionRef);
+}
+
 void TurtleLuaEngine::RegisterCreatureEvent(uint32 entry, uint32 eventId, int functionRef)
 {
     _creatureEvents[entry][eventId].push_back(functionRef);
@@ -18167,6 +18203,16 @@ void TurtleLuaEngine::ClearGroupEvents(uint32 eventId, bool allEvents)
 void TurtleLuaEngine::ClearGuildEvents(uint32 eventId, bool allEvents)
 {
     ClearEventStore(_state, _guildEvents, eventId, allEvents);
+}
+
+void TurtleLuaEngine::ClearMapEvents(uint32 mapId, uint32 eventId, bool allEvents)
+{
+    ClearEntryEventStore(_state, _mapEvents, mapId, eventId, allEvents);
+}
+
+void TurtleLuaEngine::ClearInstanceEvents(uint32 instanceId, uint32 eventId, bool allEvents)
+{
+    ClearEntryEventStore(_state, _instanceEvents, instanceId, eventId, allEvents);
 }
 
 void TurtleLuaEngine::ClearCreatureEvents(uint32 entry, uint32 eventId, bool allEvents)
@@ -18699,6 +18745,220 @@ void TurtleLuaEngine::CallServerEvent(uint32 eventId, uint32 arg)
             lua_pop(_state, 1);
         }
     }
+}
+
+void TurtleLuaEngine::CallServerMapEvent(uint32 eventId, Map* map, Player* player, uint32 diff)
+{
+    auto itr = _serverEvents.find(eventId);
+    if (itr == _serverEvents.end())
+        return;
+
+    std::vector<int> functionRefs = itr->second;
+    for (int functionRef : functionRefs)
+    {
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        lua_pushinteger(_state, eventId);
+        PushMap(map);
+
+        int argCount = 2;
+        if (eventId == MAP_EVENT_ON_PLAYER_ENTER || eventId == MAP_EVENT_ON_PLAYER_LEAVE)
+        {
+            PushPlayer(player);
+            argCount = 3;
+        }
+        else if (eventId == MAP_EVENT_ON_UPDATE)
+        {
+            lua_pushinteger(_state, diff);
+            argCount = 3;
+        }
+
+        if (lua_pcall(_state, argCount, 0, 0) != LUA_OK)
+        {
+            LogError("map server event");
+            lua_pop(_state, 1);
+        }
+    }
+}
+
+std::vector<int> TurtleLuaEngine::CollectInstanceEventRefs(Map* map, uint32 eventId)
+{
+    std::vector<int> refs;
+    if (!map)
+        return refs;
+
+    auto mapItr = _mapEvents.find(map->GetId());
+    if (mapItr != _mapEvents.end())
+    {
+        auto eventItr = mapItr->second.find(eventId);
+        if (eventItr != mapItr->second.end())
+            refs.insert(refs.end(), eventItr->second.begin(), eventItr->second.end());
+    }
+
+    auto instanceItr = _instanceEvents.find(map->GetInstanceId());
+    if (instanceItr != _instanceEvents.end())
+    {
+        auto eventItr = instanceItr->second.find(eventId);
+        if (eventItr != instanceItr->second.end())
+            refs.insert(refs.end(), eventItr->second.begin(), eventItr->second.end());
+    }
+
+    return refs;
+}
+
+bool TurtleLuaEngine::CallInstanceEvent(Map* map, uint32 eventId, int argCount)
+{
+    int base = lua_gettop(_state) - argCount;
+    std::vector<int> functionRefs = CollectInstanceEventRefs(map, eventId);
+    if (functionRefs.empty())
+    {
+        lua_settop(_state, base);
+        return false;
+    }
+
+    bool handled = true;
+
+    for (int functionRef : functionRefs)
+    {
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        for (int i = 1; i <= argCount; ++i)
+            lua_pushvalue(_state, base + i);
+
+        if (lua_pcall(_state, argCount, LUA_MULTRET, 0) != LUA_OK)
+        {
+            LogError("instance event");
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        int results = lua_gettop(_state) - base - argCount;
+        int firstResult = base + argCount + 1;
+        if (results >= 1 && lua_isboolean(_state, firstResult) && !lua_toboolean(_state, firstResult))
+            handled = false;
+
+        lua_settop(_state, base + argCount);
+
+        if (!handled)
+            break;
+    }
+
+    lua_settop(_state, base);
+    return handled;
+}
+
+void TurtleLuaEngine::OnMapCreate(Map* map)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled() || !map)
+        return;
+
+    CallServerMapEvent(MAP_EVENT_ON_CREATE, map, nullptr, 0);
+}
+
+void TurtleLuaEngine::OnMapDestroy(Map* map)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled() || !map)
+        return;
+
+    CallServerMapEvent(MAP_EVENT_ON_DESTROY, map, nullptr, 0);
+}
+
+void TurtleLuaEngine::OnMapPlayerEnter(Map* map, Player* player)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled() || !map || !player)
+        return;
+
+    CallServerMapEvent(MAP_EVENT_ON_PLAYER_ENTER, map, player, 0);
+}
+
+void TurtleLuaEngine::OnMapPlayerLeave(Map* map, Player* player)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled() || !map || !player)
+        return;
+
+    CallServerMapEvent(MAP_EVENT_ON_PLAYER_LEAVE, map, player, 0);
+}
+
+void TurtleLuaEngine::OnMapUpdate(Map* map, uint32 diff)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled() || !map)
+        return;
+
+    CallServerMapEvent(MAP_EVENT_ON_UPDATE, map, nullptr, diff);
+}
+
+void TurtleLuaEngine::OnInstanceInitialize(Map* map)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled() || !map || !map->GetInstanceData())
+        return;
+
+    lua_pushinteger(_state, INSTANCE_EVENT_ON_INITIALIZE);
+    PushInstanceDataValue(_state, map->GetInstanceData());
+    PushMap(map);
+    CallInstanceEvent(map, INSTANCE_EVENT_ON_INITIALIZE, 3);
+}
+
+void TurtleLuaEngine::OnInstanceLoad(Map* map)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled() || !map || !map->GetInstanceData())
+        return;
+
+    lua_pushinteger(_state, INSTANCE_EVENT_ON_LOAD);
+    PushInstanceDataValue(_state, map->GetInstanceData());
+    PushMap(map);
+    CallInstanceEvent(map, INSTANCE_EVENT_ON_LOAD, 3);
+}
+
+void TurtleLuaEngine::OnInstanceUpdate(Map* map, uint32 diff)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled() || !map || !map->GetInstanceData())
+        return;
+
+    lua_pushinteger(_state, INSTANCE_EVENT_ON_UPDATE);
+    PushInstanceDataValue(_state, map->GetInstanceData());
+    PushMap(map);
+    lua_pushinteger(_state, diff);
+    CallInstanceEvent(map, INSTANCE_EVENT_ON_UPDATE, 4);
+}
+
+void TurtleLuaEngine::OnInstancePlayerEnter(Map* map, Player* player)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled() || !map || !map->GetInstanceData() || !player)
+        return;
+
+    lua_pushinteger(_state, INSTANCE_EVENT_ON_PLAYER_ENTER);
+    PushInstanceDataValue(_state, map->GetInstanceData());
+    PushMap(map);
+    PushPlayer(player);
+    CallInstanceEvent(map, INSTANCE_EVENT_ON_PLAYER_ENTER, 4);
 }
 
 void TurtleLuaEngine::OnGroupCreate(Group* group, ObjectGuid const& leaderGuid, uint32 groupType)
@@ -21122,6 +21382,16 @@ void TurtleLuaEngine::OnCreatureAdd(Creature* creature)
     lua_pushinteger(_state, CREATURE_EVENT_ON_ADD);
     PushCreature(creature);
     CallCreatureEvent(creature, CREATURE_EVENT_ON_ADD, 2);
+
+    Map* map = creature->GetMap();
+    if (map && map->GetInstanceData())
+    {
+        lua_pushinteger(_state, INSTANCE_EVENT_ON_CREATURE_CREATE);
+        PushInstanceDataValue(_state, map->GetInstanceData());
+        PushMap(map);
+        PushCreature(creature);
+        CallInstanceEvent(map, INSTANCE_EVENT_ON_CREATURE_CREATE, 4);
+    }
 }
 
 void TurtleLuaEngine::OnCreatureRemove(Creature* creature)
@@ -21970,6 +22240,16 @@ void TurtleLuaEngine::OnGameObjectAdd(GameObject* go)
     lua_pushinteger(_state, GAMEOBJECT_EVENT_ON_ADD);
     PushGameObject(go);
     CallEntryEvent(_gameObjectEvents, go->GetEntry(), GAMEOBJECT_EVENT_ON_ADD, 2);
+
+    Map* map = go->GetMap();
+    if (map && map->GetInstanceData())
+    {
+        lua_pushinteger(_state, INSTANCE_EVENT_ON_GAMEOBJECT_CREATE);
+        PushInstanceDataValue(_state, map->GetInstanceData());
+        PushMap(map);
+        PushGameObject(go);
+        CallInstanceEvent(map, INSTANCE_EVENT_ON_GAMEOBJECT_CREATE, 4);
+    }
 }
 
 void TurtleLuaEngine::OnGameObjectRemove(GameObject* go)

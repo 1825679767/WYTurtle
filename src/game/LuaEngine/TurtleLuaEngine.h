@@ -103,6 +103,13 @@ enum TurtleLuaServerEvents
     WORLD_EVENT_ON_STARTUP = 14,
     WORLD_EVENT_ON_SHUTDOWN = 15,
     ELUNA_EVENT_ON_LUA_STATE_CLOSE = 16,
+    MAP_EVENT_ON_CREATE = 17,
+    MAP_EVENT_ON_DESTROY = 18,
+    MAP_EVENT_ON_GRID_LOAD = 19,
+    MAP_EVENT_ON_GRID_UNLOAD = 20,
+    MAP_EVENT_ON_PLAYER_ENTER = 21,
+    MAP_EVENT_ON_PLAYER_LEAVE = 22,
+    MAP_EVENT_ON_UPDATE = 23,
     ADDON_EVENT_ON_MESSAGE = 30,
     ELUNA_EVENT_ON_LUA_STATE_OPEN = 33,
 };
@@ -132,6 +139,17 @@ enum TurtleLuaGroupEvents
     GROUP_EVENT_ON_LEADER_CHANGE = 4,
     GROUP_EVENT_ON_DISBAND = 5,
     GROUP_EVENT_ON_CREATE = 6,
+};
+
+enum TurtleLuaInstanceEvents
+{
+    INSTANCE_EVENT_ON_INITIALIZE = 1,
+    INSTANCE_EVENT_ON_LOAD = 2,
+    INSTANCE_EVENT_ON_UPDATE = 3,
+    INSTANCE_EVENT_ON_PLAYER_ENTER = 4,
+    INSTANCE_EVENT_ON_CREATURE_CREATE = 5,
+    INSTANCE_EVENT_ON_GAMEOBJECT_CREATE = 6,
+    INSTANCE_EVENT_ON_CHECK_ENCOUNTER_IN_PROGRESS = 7,
 };
 
 enum TurtleLuaCreatureEvents
@@ -272,6 +290,15 @@ public:
     void OnPlayerUpdateZone(Player* player, uint32 newZone, uint32 newArea);
     void OnPlayerMapChanged(Player* player);
     void OnPlayerUpdateArea(Player* player, uint32 oldArea, uint32 newArea);
+    void OnMapCreate(Map* map);
+    void OnMapDestroy(Map* map);
+    void OnMapPlayerEnter(Map* map, Player* player);
+    void OnMapPlayerLeave(Map* map, Player* player);
+    void OnMapUpdate(Map* map, uint32 diff);
+    void OnInstanceInitialize(Map* map);
+    void OnInstanceLoad(Map* map);
+    void OnInstanceUpdate(Map* map, uint32 diff);
+    void OnInstancePlayerEnter(Map* map, Player* player);
     void OnCreatureEnterCombat(Creature* creature, Unit* target);
     void OnCreatureLeaveCombat(Creature* creature);
     void OnCreatureTargetDied(Creature* creature, Unit* victim);
@@ -299,6 +326,8 @@ public:
     void RegisterServerEvent(uint32 eventId, int functionRef);
     void RegisterGroupEvent(uint32 eventId, int functionRef);
     void RegisterGuildEvent(uint32 eventId, int functionRef);
+    void RegisterMapEvent(uint32 mapId, uint32 eventId, int functionRef);
+    void RegisterInstanceEvent(uint32 instanceId, uint32 eventId, int functionRef);
     void RegisterCreatureEvent(uint32 entry, uint32 eventId, int functionRef);
     void RegisterUniqueCreatureEvent(ObjectGuid const& guid, uint32 instanceId, uint32 eventId, int functionRef);
     void RegisterGameObjectEvent(uint32 entry, uint32 eventId, int functionRef);
@@ -313,6 +342,8 @@ public:
     void ClearServerEvents(uint32 eventId, bool allEvents);
     void ClearGroupEvents(uint32 eventId, bool allEvents);
     void ClearGuildEvents(uint32 eventId, bool allEvents);
+    void ClearMapEvents(uint32 mapId, uint32 eventId, bool allEvents);
+    void ClearInstanceEvents(uint32 instanceId, uint32 eventId, bool allEvents);
     void ClearCreatureEvents(uint32 entry, uint32 eventId, bool allEvents);
     void ClearUniqueCreatureEvents(ObjectGuid const& guid, uint32 instanceId, uint32 eventId, bool allEvents);
     void ClearGameObjectEvents(uint32 entry, uint32 eventId, bool allEvents);
@@ -459,6 +490,9 @@ private:
     bool CallPacketFunctionRefs(std::vector<int> const& functionRefs, uint32 eventId, WorldPacket& packet, Player* player, char const* context);
     void CallServerEvent(uint32 eventId);
     void CallServerEvent(uint32 eventId, uint32 arg);
+    void CallServerMapEvent(uint32 eventId, Map* map, Player* player, uint32 diff);
+    std::vector<int> CollectInstanceEventRefs(Map* map, uint32 eventId);
+    bool CallInstanceEvent(Map* map, uint32 eventId, int argCount);
     std::vector<int> CollectCreatureEventRefs(Creature* creature, uint32 eventId);
     bool CallCreatureEvent(Creature* creature, uint32 eventId, int argCount);
     bool CallEntryEvent(std::map<uint32, std::map<uint32, std::vector<int>>>& store, uint32 entry, uint32 eventId, int argCount);
@@ -476,6 +510,8 @@ private:
     std::map<uint32, std::vector<int>> _playerEvents;
     std::map<uint32, std::vector<int>> _groupEvents;
     std::map<uint32, std::vector<int>> _guildEvents;
+    std::map<uint32, std::map<uint32, std::vector<int>>> _mapEvents;
+    std::map<uint32, std::map<uint32, std::vector<int>>> _instanceEvents;
     std::map<uint32, std::map<uint32, std::vector<int>>> _creatureEvents;
     std::map<UniqueCreatureEventKey, std::map<uint32, std::vector<int>>> _uniqueCreatureEvents;
     std::map<uint32, std::map<uint32, std::vector<int>>> _gameObjectEvents;

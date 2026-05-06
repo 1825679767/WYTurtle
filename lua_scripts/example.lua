@@ -8,6 +8,15 @@ RegisterServerEvent(13, function(event, diff)
     -- World update event is intentionally quiet; use CreateLuaEvent for normal timers.
 end)
 
+-- Map/Instance 事件示例。打开注释后，把 mapId 换成目标副本地图 ID。
+-- RegisterMapEvent(409, 4, function(event, instanceData, map, player)
+--     player:SendBroadcastMessage("Lua saw you enter instance map " .. map:GetMapId())
+-- end)
+--
+-- RegisterServerEvent(21, function(event, map, player)
+--     -- 玩家进入任意地图时触发；正式脚本里建议按 map:GetMapId() 做过滤。
+-- end)
+
 CreateLuaEvent(function(eventId)
     print("Lua timed event " .. eventId .. " is alive")
 end, 60000, 0)

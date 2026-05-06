@@ -5,7 +5,7 @@
 
 当前实现不是把 AzerothCore 3.3.5 的 Eluna 原样照搬，而是做了一套适配
 Turtle 1.12 核心结构的 Lua 兼容层。它已经可以加载自定义 Lua 脚本，并支持
-常用事件、Gossip、任务对象、物品模板、生物模板、GameObject 模板、法术模板、施法目标、ObjectGuid、WorldPacket、Roll、InstanceData、玩家消息/提示发送、数据库访问、定时器和大量常用对象方法。
+常用事件、Map/Instance 生命周期、Gossip、任务对象、物品模板、生物模板、GameObject 模板、法术模板、施法目标、ObjectGuid、WorldPacket、Roll、InstanceData、玩家消息/提示发送、数据库访问、定时器和大量常用对象方法。
 
 ## 当前实现位置
 
@@ -78,6 +78,7 @@ E:\TurtleBY
 - 全局 Group/Guild 事件补充：新增 `RegisterGroupEvent`、`RegisterGuildEvent`、`ClearGroupEvents`、`ClearGuildEvents`，并在 `Group.cpp` / `Guild.cpp` 接入真实触发点。
 - 全局玩家 Gossip 事件补充：新增 `RegisterPlayerGossipEvent`、`ClearPlayerGossipEvents`，并在客户端选择玩家自身 Gossip 菜单项时回调 Lua。
 - 全局唯一 Creature 事件补充：新增 `RegisterUniqueCreatureEvent`、`ClearUniqueCreatureEvents`，按 `ObjectGuid + instanceId + eventId` 绑定单个已经刷出的生物；它和 `RegisterCreatureEvent` 共用现有 Creature 事件触发点，同一事件会先执行 entry 绑定，再执行唯一生物绑定。当前沿用本兼容层现有事件注册语义，不返回取消函数，`shots` 参数暂未实现。
+- 全局 Map/Instance 副本事件补充：新增 `RegisterMapEvent`、`RegisterInstanceEvent`、`ClearMapEvents`、`ClearInstanceEvents`。`RegisterMapEvent(mapId, eventId, function)` 按地图 ID 绑定该地图所有副本实例；`RegisterInstanceEvent(instanceId, eventId, function)` 按运行时实例 ID 绑定单个实例。同一副本事件会先执行 mapId 绑定，再执行 instanceId 绑定。当前已触发事件 `1` 初始化、`2` 加载、`3` 更新、`4` 玩家进入、`5` Creature 创建、`6` GameObject 创建；事件 `7` 检查战斗进度还没有统一安全触发点，暂不触发。
 - SpellInfo 3.3.5 参考方法名补齐：`HasAreaAuraEffect`、`IsAffectingArea`、`IsTargetingArea`、`NeedsExplicitUnitTarget`、`GetSpellSpecific`、`GetDispelMask`、`CheckTarget`、`CheckExplicitTarget` 等。当前 `SpellInfoMethods.h` 参考方法差异为 `missing=0`，其中部分检查按 Turtle 1.12 能力做兼容近似。
 - SpellEntry 旧接口兼容补齐：`SpellEntryMethods.h` 的 92 个参考方法名已经并入 `SpellInfo` 元表，当前差异扫描为 `ref=92 target=165 missing=0`。本批补上了 `GetSpellName`、`GetDurationIndex`、`GetManaCostPerlevel`、`GetManaPerSecond`、`GetEquippedItemClass`、`GetEffectRealPointsPerLevel`、`GetEffectRadiusIndex`、`GetEffectDamageMultiplier`、`GetEffectBonusMultiplier`、`GetTotemCategory`、`GetAreaGroupId`、`GetRuneCostID` 等兼容入口；WotLK 专属字段按 Turtle 1.12 能力返回 `0` 或全 0 table。
 
@@ -120,6 +121,8 @@ RegisterServerEvent(eventId, function)
 RegisterGroupEvent(eventId, function)
 RegisterGuildEvent(eventId, function)
 RegisterPacketEvent(opcode, eventId, function[, shots])
+RegisterMapEvent(mapId, eventId, function[, shots])
+RegisterInstanceEvent(instanceId, eventId, function[, shots])
 RegisterCreatureEvent(entry, eventId, function)
 RegisterUniqueCreatureEvent(guidOrCreature, instanceId, eventId, function[, shots])
 RegisterGameObjectEvent(entry, eventId, function)
@@ -134,6 +137,8 @@ ClearServerEvents([eventId])
 ClearGroupEvents([eventId])
 ClearGuildEvents([eventId])
 ClearPacketEvents(opcode, [eventId])
+ClearMapEvents(mapId, [eventId])
+ClearInstanceEvents(instanceId, [eventId])
 ClearCreatureEvents(entry, [eventId])
 ClearUniqueCreatureEvents(guidOrCreature, instanceId, [eventId])
 ClearGameObjectEvents(entry, [eventId])
@@ -351,6 +356,8 @@ HIGHGUID_MO_TRANSPORT
 - `ClearPlayerEvents()` 清理所有玩家事件；传入 `eventId` 时只清理指定玩家事件。
 - `ClearServerEvents()` 清理所有服务端事件；传入 `eventId` 时只清理指定服务端事件。
 - `ClearPacketEvents(opcode)` 清理指定 opcode 的所有包事件；传入 `eventId` 时只清理该 opcode 的指定包事件。
+- `ClearMapEvents(mapId)` 清理指定地图 ID 绑定的所有副本生命周期事件；传入 `eventId` 时只清理该地图的指定副本事件。
+- `ClearInstanceEvents(instanceId)` 清理指定运行时实例 ID 绑定的所有副本生命周期事件；传入 `eventId` 时只清理该实例的指定事件。
 - `ClearCreatureEvents(entry)` 清理该生物模板的所有 Creature 事件；传入 `eventId` 时只清理该模板的指定事件。
 - `ClearUniqueCreatureEvents(guidOrCreature, instanceId)` 清理指定生物实例的所有 Creature 事件；传入 `eventId` 时只清理这个生物实例的指定事件。`guidOrCreature` 可以传 `Creature` 对象或 `ObjectGuid`；`instanceId` 要和目标所在地图实例一致，普通大陆通常是 `0`。
 - `ClearGameObjectEvents(entry)`、`ClearItemEvents(entry)` 逻辑相同，分别清理指定物体或物品模板事件。
@@ -367,9 +374,33 @@ RegisterServerEvent(13, function(event, diff) end) -- 世界 Update
 RegisterServerEvent(14, function(event) end)       -- 服务端启动 / Lua 初始化后
 RegisterServerEvent(15, function(event) end)       -- 服务端关闭
 RegisterServerEvent(16, function(event) end)       -- Lua 状态关闭
+RegisterServerEvent(17, function(event, map) end)  -- 地图对象创建
+RegisterServerEvent(18, function(event, map) end)  -- 地图对象销毁
+RegisterServerEvent(21, function(event, map, player) end) -- 玩家进入地图
+RegisterServerEvent(22, function(event, map, player) end) -- 玩家离开地图
+RegisterServerEvent(23, function(event, map, diff) end)   -- 地图 Update
 RegisterServerEvent(30, function(event, sender, type, prefix, msg, target) end) -- AddOn 消息
 RegisterServerEvent(33, function(event) end)       -- Lua 状态打开
 ```
+
+`RegisterServerEvent(19/20)` 对应的网格加载/卸载事件目前还没有接入，避免在网格线程和对象生命周期里不安全地调用 Lua。
+
+### Map / Instance 副本生命周期事件
+
+```lua
+RegisterMapEvent(mapId, 1, function(event, instanceData, map) end)             -- 副本脚本初始化
+RegisterMapEvent(mapId, 2, function(event, instanceData, map) end)             -- 副本脚本加载
+RegisterMapEvent(mapId, 3, function(event, instanceData, map, diff) end)       -- 副本脚本 Update
+RegisterMapEvent(mapId, 4, function(event, instanceData, map, player) end)     -- 玩家进入副本地图
+RegisterMapEvent(mapId, 5, function(event, instanceData, map, creature) end)   -- Creature 创建
+RegisterMapEvent(mapId, 6, function(event, instanceData, map, gameObject) end) -- GameObject 创建
+
+RegisterInstanceEvent(instanceId, 4, function(event, instanceData, map, player) end)
+ClearMapEvents(mapId, 4)
+ClearInstanceEvents(instanceId, 4)
+```
+
+说明：`RegisterMapEvent` 的第一个参数是地图 ID，会作用于该地图所有副本实例；`RegisterInstanceEvent` 的第一个参数是运行时实例 ID，只作用于某一个已创建实例。两者绑定同一个事件时，先执行 mapId 绑定，再执行 instanceId 绑定。当前事件 `7`（检查战斗进度）没有统一安全触发点，暂不触发。
 
 服务端包事件也已接入，作用于所有 opcode：
 
@@ -2453,6 +2484,7 @@ end
 - 脚本加载、重载和关闭事件。
 - 玩家创建、删除、登录、登出、施法、击杀、被 Creature 击杀、决斗、经验/金币/声望变化、天赋变化、等级变化、聊天、命令、文字表情、保存、副本绑定、Zone/Area/地图变化、队伍掷骰获物、战场逃亡事件。
 - 服务端启动、关闭、Update 事件。
+- 地图创建、销毁、玩家进入/离开、地图 Update 事件，以及按 mapId / instanceId 绑定的副本生命周期事件。
 - NPC 战斗、死亡、重生、AI Update。
 - 按模板 entry 绑定的 Creature 事件，以及按 `ObjectGuid + instanceId` 绑定的唯一 Creature 事件。
 - Creature / GameObject / Item 的任务、Gossip、使用入口。

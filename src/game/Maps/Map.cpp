@@ -60,9 +60,16 @@
 #include "Autoscaling/AutoScaler.hpp"
 #include "Logging/DatabaseLogger.hpp"
 #include "PerfStats.h"
+#ifdef USE_LUA
+#include "TurtleLuaEngine.h"
+#endif
 
 Map::~Map()
 {
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnMapDestroy(this);
+#endif
+
     UnloadAll(true);
 
     if (!m_scriptSchedule.empty())
@@ -151,6 +158,10 @@ Map::Map(uint32 id, time_t expiry, uint32 InstanceId)
     }
 
     ++PerfStats::g_totalMaps;
+
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnMapCreate(this);
+#endif
 }
 
 // Nostalrius
@@ -403,6 +414,11 @@ bool Map::Add(Player *player)
 
     if (i_data)
         i_data->OnPlayerEnter(player);
+
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnInstancePlayerEnter(this, player);
+    sTurtleLuaEngine.OnMapPlayerEnter(this, player);
+#endif
 
     // Remove any buffs defined in instance_aura_removal for the new map
     sAuraRemovalMgr.PlayerEnterMap(i_id, player);
@@ -947,6 +963,12 @@ void Map::Update(uint32 t_diff)
     if (i_data)
         i_data->Update(t_diff);
 
+#ifdef USE_LUA
+    if (i_data)
+        sTurtleLuaEngine.OnInstanceUpdate(this, t_diff);
+    sTurtleLuaEngine.OnMapUpdate(this, t_diff);
+#endif
+
     m_weatherSystem->UpdateWeathers(t_diff);
 
     bool packetBroadcastSlow = sWorld.GetBroadcaster()->IsMapSlow(GetInstanceId());
@@ -1125,6 +1147,10 @@ void Map::Remove(Player *player, bool remove)
 {
     if (i_data)
         i_data->OnPlayerLeave(player, remove);
+
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnMapPlayerLeave(this, player);
+#endif
 
     m_mCreatureSummonCount.erase(player->GetGUID());
     m_mCreatureSummonLimit.erase(player->GetGUID());
@@ -1925,11 +1951,18 @@ void Map::CreateInstanceData(bool load)
                 CharacterDatabase.PExecute("INSERT INTO world VALUES ('%u', '')", GetId());
             i_data->Create();
         }
+
+#ifdef USE_LUA
+        sTurtleLuaEngine.OnInstanceLoad(this);
+#endif
     }
     else
     {
         DEBUG_LOG("New instance data, \"%s\" ,initialized!", sScriptMgr.GetScriptName(i_script_id));
         i_data->Initialize();
+#ifdef USE_LUA
+        sTurtleLuaEngine.OnInstanceInitialize(this);
+#endif
         i_data->Create();
     }
 }
