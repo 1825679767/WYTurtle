@@ -2718,7 +2718,7 @@ end
 - `Creature`、`Player`、`Corpse`、`DynamicObject`、`SpellInfo`、`SpellCastTargets`、`GemPropertiesEntry`、`Vehicle`、`Group`、`Guild`、`Map`、`BattleGround`、`Ticket`、动态 `Spell`、通用 `Object`、通用 `WorldObject` 和通用 `Unit` 的 3.3.5 参考方法名已补齐或基础接入，不过部分接口按 Turtle 1.12 能力做兼容返回。
 - `ItemTemplate` 的 3.3.5 参考方法名已补齐，其中 `GetIcon()` 已接入 `ItemDisplayInfo.dbc` 图标字段；找不到显示信息时才返回空字符串。
 - 3.3.5 专属成就、真实雕文效果、铭文/完整双天赋主动槽位、LFG 和部分邮件/拍卖/银行/训练师细节目前仍是兼容返回或空入口，后续需要按 Turtle 1.12 的真实系统单独补强；竞技场点数和雕文槽位当前只是脚本可见的持久化数值。
-- 3.3.5 玩家事件里 `45` 成就完成已按脚本可见的兼容成就状态触发；`50` LFG 入队检查没有 Turtle 1.12 等价系统，当前不接入。
+- 3.3.5 玩家事件里 `45` 成就完成已按脚本可见的兼容成就状态触发；`50` LFG 入队检查已接入 Turtle 1.12 的 Meeting Stone 入队流程，按兼容参数传递。
 - 真实载具系统在 Turtle 1.12 中不存在，当前 `IsOnVehicle` / `GetVehicle` / `GetVehicleKit` 仍为空入口；Vehicle 元表方法也只是兼容返回。
 - 3.3.5 参考模块的全局公开函数当前已对齐；`RegisterEntryHelper`、`RegisterEventHelper`、`RegisterUniqueHelper`、`DBQueryAsync` 是 Eluna C++ 内部 helper，不是需要暴露给 Lua 脚本的公开 API。`WorldDBQueryAsync`、`CharDBQueryAsync` / `CharacterDBQueryAsync`、`AuthDBQueryAsync` / `LoginDBQueryAsync`、`HttpRequest` 已接入，callback 会回到 Lua 世界线程执行。
 
