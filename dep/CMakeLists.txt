@@ -19,9 +19,6 @@ add_subdirectory(fmt)
 
 add_subdirectory(src)
 add_subdirectory(recastnavigation)
-if (USE_EXTRACTORS)
-	add_subdirectory(libmpq)
-endif()
 
 add_subdirectory(re2)
 if(USE_DISCORD_BOT)

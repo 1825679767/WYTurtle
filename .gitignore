@@ -3,6 +3,8 @@
 /out/
 /install/
 /dist/
+/tools/
+/lua_scripts/
 
 # Visual Studio / CMake generated files
 /.vs/
@@ -23,6 +25,7 @@ CTestTestfile.cmake
 *.idb
 *.ipdb
 *.iobj
+*.aps
 
 # Large packaged resources
 *.zip
