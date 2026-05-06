@@ -73,6 +73,40 @@ constexpr char const* SPELLTARGETS_METATABLE = "Turtle.SpellCastTargets";
 constexpr char const* WORLDPACKET_METATABLE = "Turtle.WorldPacket";
 constexpr char const* OBJECTGUID_METATABLE = "Turtle.ObjectGuid";
 
+uint32 ToElunaChatType(uint32 type)
+{
+    switch (ChatMsg(type))
+    {
+        case CHAT_MSG_SYSTEM: return 0x00;
+        case CHAT_MSG_SAY: return 0x01;
+        case CHAT_MSG_PARTY: return 0x02;
+        case CHAT_MSG_RAID: return 0x03;
+        case CHAT_MSG_GUILD: return 0x04;
+        case CHAT_MSG_OFFICER: return 0x05;
+        case CHAT_MSG_YELL: return 0x06;
+        case CHAT_MSG_WHISPER: return 0x07;
+        case CHAT_MSG_WHISPER_INFORM: return 0x09;
+        case CHAT_MSG_EMOTE: return 0x0A;
+        case CHAT_MSG_TEXT_EMOTE: return 0x0B;
+        case CHAT_MSG_MONSTER_SAY: return 0x0C;
+        case CHAT_MSG_MONSTER_YELL: return 0x0E;
+        case CHAT_MSG_MONSTER_WHISPER: return 0x0F;
+        case CHAT_MSG_MONSTER_EMOTE: return 0x10;
+        case CHAT_MSG_CHANNEL: return 0x11;
+        case CHAT_MSG_CHANNEL_JOIN: return 0x12;
+        case CHAT_MSG_CHANNEL_LEAVE: return 0x13;
+        case CHAT_MSG_CHANNEL_LIST: return 0x14;
+        case CHAT_MSG_CHANNEL_NOTICE: return 0x15;
+        case CHAT_MSG_CHANNEL_NOTICE_USER: return 0x16;
+        case CHAT_MSG_AFK: return 0x17;
+        case CHAT_MSG_DND: return 0x18;
+        case CHAT_MSG_IGNORED: return 0x19;
+        case CHAT_MSG_SKILL: return 0x1A;
+        case CHAT_MSG_LOOT: return 0x1B;
+        default: return type;
+    }
+}
+
 struct LuaPlayer
 {
     Player* player;
@@ -17272,7 +17306,7 @@ bool TurtleLuaEngine::CallPlayerChatEvent(uint32 eventId, char const* context, P
         lua_pushinteger(_state, eventId);
         PushPlayer(player);
         lua_pushlstring(_state, message.c_str(), message.size());
-        lua_pushinteger(_state, type);
+        lua_pushinteger(_state, ToElunaChatType(type));
         lua_pushinteger(_state, lang);
         switch (eventId)
         {
