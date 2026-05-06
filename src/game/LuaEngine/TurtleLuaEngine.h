@@ -7,6 +7,7 @@
 #include <map>
 #include <mutex>
 #include <string>
+#include <utility>
 #include <vector>
 
 struct lua_State;
@@ -444,6 +445,7 @@ public:
 
     uint64 GetStateId() const { return _stateId; }
     void EnqueueAsyncQueryResult(uint64 stateId, int functionRef, QueryNamedResult* result);
+    void EnqueueHttpResponse(uint64 stateId, int functionRef, int statusCode, std::string body, std::vector<std::pair<std::string, std::string>> headers);
 
     uint32 CreateTimedEvent(int functionRef, uint32 delay, uint32 repeats);
     uint32 CreateTimedEvent(int functionRef, uint32 minDelay, uint32 maxDelay, uint32 repeats, WorldObject* object);
@@ -488,6 +490,14 @@ private:
     {
         int functionRef;
         QueryNamedResult* result;
+    };
+
+    struct PendingHttpResponse
+    {
+        int functionRef;
+        int statusCode;
+        std::string body;
+        std::vector<std::pair<std::string, std::string>> headers;
     };
 
     void OpenState();
@@ -546,6 +556,8 @@ private:
     void CallEntryEventIgnoreResult(std::map<uint32, std::map<uint32, std::vector<int>>>& store, uint32 entry, uint32 eventId, int argCount);
     void UpdateAsyncQueries();
     void ClearAsyncQueries();
+    void UpdateHttpResponses();
+    void ClearHttpResponses();
     void UpdateTimedEvents(uint32 diff);
 
     lua_State* _state;
@@ -556,6 +568,7 @@ private:
     std::string _scriptPath;
     std::recursive_mutex _lock;
     std::mutex _asyncQueryLock;
+    std::mutex _httpResponseLock;
     std::map<uint32, std::vector<int>> _serverEvents;
     std::map<uint32, std::vector<int>> _playerEvents;
     std::map<uint32, std::vector<int>> _groupEvents;
@@ -575,6 +588,7 @@ private:
     std::map<uint32, std::map<uint32, std::vector<int>>> _itemGossipEvents;
     std::map<uint32, std::map<uint32, std::vector<int>>> _playerGossipEvents;
     std::vector<PendingAsyncQuery> _asyncQueries;
+    std::vector<PendingHttpResponse> _httpResponses;
     std::vector<TimedEvent> _timedEvents;
 };
 

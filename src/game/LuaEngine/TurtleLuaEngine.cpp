@@ -46,16 +46,20 @@
 #include "WorldPacket.h"
 #include "WorldSession.h"
 #include "Util.h"
+#include "httplib.h"
 
 #include <algorithm>
+#include <cctype>
 #include <cstdlib>
 #include <ctime>
+#include <exception>
 #include <filesystem>
 #include <list>
 #include <memory>
 #include <new>
 #include <shared_mutex>
 #include <sstream>
+#include <thread>
 #include <type_traits>
 #include <utility>
 
@@ -2129,6 +2133,194 @@ int LuaDBQueryAsync(lua_State* state, Database& database)
     }
 
     database.AddToDelayQueue(new LuaAsyncNamedQueryOperation(sql, engine->GetStateId(), functionRef));
+    return 0;
+}
+
+struct LuaHttpRequestData
+{
+    std::string method;
+    std::string url;
+    std::string body;
+    std::string contentType;
+    httplib::Headers headers;
+};
+
+struct ParsedHttpUrl
+{
+    std::string host;
+    std::string path;
+};
+
+std::string ToUpperCopy(std::string value)
+{
+    std::transform(value.begin(), value.end(), value.begin(), [](unsigned char ch)
+    {
+        return static_cast<char>(std::toupper(ch));
+    });
+    return value;
+}
+
+bool IsSupportedHttpMethod(std::string const& method)
+{
+    return method == "GET" || method == "HEAD" || method == "POST" || method == "PUT" ||
+        method == "PATCH" || method == "DELETE" || method == "OPTIONS";
+}
+
+bool ParseHttpUrl(std::string const& url, ParsedHttpUrl& parsed)
+{
+    std::size_t schemeEnd = url.find("://");
+    if (schemeEnd == std::string::npos)
+        return false;
+
+    std::string scheme = ToUpperCopy(url.substr(0, schemeEnd));
+    if (scheme != "HTTP" && scheme != "HTTPS")
+        return false;
+
+    std::size_t authorityStart = schemeEnd + 3;
+    if (authorityStart >= url.size())
+        return false;
+
+    std::size_t pathStart = url.find_first_of("/?#", authorityStart);
+    std::string authority = pathStart == std::string::npos ? url.substr(authorityStart) : url.substr(authorityStart, pathStart - authorityStart);
+    if (authority.empty())
+        return false;
+
+    parsed.host = (scheme == "HTTPS" ? "https" : "http") + std::string("://") + authority;
+    if (pathStart == std::string::npos)
+        parsed.path = "/";
+    else if (url[pathStart] == '/')
+        parsed.path = url.substr(pathStart);
+    else
+        parsed.path = "/" + url.substr(pathStart);
+
+    return true;
+}
+
+httplib::Result DoLuaHttpRequest(httplib::Client& client, LuaHttpRequestData const& request, std::string const& path)
+{
+    if (request.method == "GET")
+        return client.Get(path, request.headers);
+    if (request.method == "HEAD")
+        return client.Head(path, request.headers);
+    if (request.method == "POST")
+        return client.Post(path, request.headers, request.body, request.contentType);
+    if (request.method == "PUT")
+        return client.Put(path, request.headers, request.body, request.contentType);
+    if (request.method == "PATCH")
+        return client.Patch(path, request.headers, request.body, request.contentType);
+    if (request.method == "DELETE")
+    {
+        if (!request.body.empty())
+            return client.Delete(path, request.headers, request.body, request.contentType.empty() ? "text/plain" : request.contentType);
+
+        return client.Delete(path, request.headers);
+    }
+    if (request.method == "OPTIONS")
+        return client.Options(path, request.headers);
+
+    return httplib::Result();
+}
+
+void ExecuteLuaHttpRequest(uint64 stateId, int functionRef, LuaHttpRequestData request)
+{
+    int statusCode = 0;
+    std::string body;
+    std::vector<std::pair<std::string, std::string>> responseHeaders;
+
+    try
+    {
+        ParsedHttpUrl parsed;
+        if (!ParseHttpUrl(request.url, parsed))
+        {
+            body = "Could not parse URL";
+            sTurtleLuaEngine.EnqueueHttpResponse(stateId, functionRef, statusCode, std::move(body), std::move(responseHeaders));
+            return;
+        }
+
+        httplib::Client client(parsed.host);
+        client.set_connection_timeout(0, 3000000);
+        client.set_read_timeout(5, 0);
+        client.set_write_timeout(5, 0);
+        client.set_follow_location(true);
+
+        httplib::Result result = DoLuaHttpRequest(client, request, parsed.path);
+        if (result)
+        {
+            statusCode = result->status;
+            body = result->body;
+            responseHeaders.reserve(result->headers.size());
+            for (auto const& header : result->headers)
+                responseHeaders.emplace_back(header.first, header.second);
+        }
+        else
+            body = httplib::to_string(result.error());
+    }
+    catch (std::exception const& ex)
+    {
+        body = ex.what();
+    }
+
+    sTurtleLuaEngine.EnqueueHttpResponse(stateId, functionRef, statusCode, std::move(body), std::move(responseHeaders));
+}
+
+int LuaHttpRequest(lua_State* state)
+{
+    auto* engine = GetEngine(state);
+    if (!engine)
+        return luaL_error(state, "Lua engine is not available");
+
+    LuaHttpRequestData request;
+    request.method = ToUpperCopy(luaL_checkstring(state, 1));
+    request.url = luaL_checkstring(state, 2);
+
+    if (!IsSupportedHttpMethod(request.method))
+        return luaL_argerror(state, 1, "unsupported HTTP method");
+
+    int headersIndex = 3;
+    int callbackIndex = 3;
+    if (!lua_istable(state, headersIndex) && lua_isstring(state, headersIndex) && lua_isstring(state, headersIndex + 1))
+    {
+        request.body = luaL_checkstring(state, 3);
+        request.contentType = luaL_checkstring(state, 4);
+        headersIndex = 5;
+        callbackIndex = 5;
+    }
+
+    if (lua_istable(state, headersIndex))
+    {
+        int tableIndex = lua_absindex(state, headersIndex);
+        ++callbackIndex;
+
+        lua_pushnil(state);
+        while (lua_next(state, tableIndex) != 0)
+        {
+            if (lua_isstring(state, -2) && lua_isstring(state, -1))
+                request.headers.emplace(lua_tostring(state, -2), lua_tostring(state, -1));
+
+            lua_pop(state, 1);
+        }
+    }
+
+    luaL_checktype(state, callbackIndex, LUA_TFUNCTION);
+    lua_pushvalue(state, callbackIndex);
+    int functionRef = luaL_ref(state, LUA_REGISTRYINDEX);
+    if (functionRef == LUA_REFNIL || functionRef == LUA_NOREF)
+        return luaL_argerror(state, callbackIndex, "unable to make a ref to function");
+
+    uint64 stateId = engine->GetStateId();
+    try
+    {
+        std::thread([stateId, functionRef, request = std::move(request)]() mutable
+        {
+            ExecuteLuaHttpRequest(stateId, functionRef, std::move(request));
+        }).detach();
+    }
+    catch (std::exception const& ex)
+    {
+        luaL_unref(state, LUA_REGISTRYINDEX, functionRef);
+        return luaL_error(state, "could not start HTTP request thread: %s", ex.what());
+    }
+
     return 0;
 }
 
@@ -16233,6 +16425,7 @@ void TurtleLuaEngine::Update(uint32 diff)
     if (!IsEnabled())
         return;
 
+    UpdateHttpResponses();
     UpdateAsyncQueries();
     UpdateTimedEvents(diff);
     CallServerEvent(WORLD_EVENT_ON_UPDATE, diff);
@@ -16298,6 +16491,73 @@ void TurtleLuaEngine::ClearAsyncQueries()
         if (_state)
             luaL_unref(_state, LUA_REGISTRYINDEX, query.functionRef);
     }
+}
+
+void TurtleLuaEngine::EnqueueHttpResponse(uint64 stateId, int functionRef, int statusCode, std::string body, std::vector<std::pair<std::string, std::string>> headers)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!_state || stateId != _stateId)
+        return;
+
+    std::lock_guard<std::mutex> queueGuard(_httpResponseLock);
+    _httpResponses.push_back(PendingHttpResponse{ functionRef, statusCode, std::move(body), std::move(headers) });
+}
+
+void TurtleLuaEngine::UpdateHttpResponses()
+{
+    std::vector<PendingHttpResponse> readyResponses;
+    {
+        std::lock_guard<std::mutex> queueGuard(_httpResponseLock);
+        readyResponses.swap(_httpResponses);
+    }
+
+    for (PendingHttpResponse& response : readyResponses)
+    {
+        if (!_state)
+            continue;
+
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, response.functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            luaL_unref(_state, LUA_REGISTRYINDEX, response.functionRef);
+            continue;
+        }
+
+        lua_pushinteger(_state, response.statusCode);
+        lua_pushlstring(_state, response.body.data(), response.body.size());
+        lua_newtable(_state);
+        for (auto const& header : response.headers)
+        {
+            lua_pushstring(_state, header.first.c_str());
+            lua_pushstring(_state, header.second.c_str());
+            lua_settable(_state, -3);
+        }
+
+        if (lua_pcall(_state, 3, 0, 0) != LUA_OK)
+        {
+            LogError("http request");
+            lua_pop(_state, 1);
+        }
+
+        luaL_unref(_state, LUA_REGISTRYINDEX, response.functionRef);
+    }
+}
+
+void TurtleLuaEngine::ClearHttpResponses()
+{
+    std::vector<PendingHttpResponse> pendingResponses;
+    {
+        std::lock_guard<std::mutex> queueGuard(_httpResponseLock);
+        pendingResponses.swap(_httpResponses);
+    }
+
+    if (!_state)
+        return;
+
+    for (PendingHttpResponse& response : pendingResponses)
+        luaL_unref(_state, LUA_REGISTRYINDEX, response.functionRef);
 }
 
 void TurtleLuaEngine::OpenState()
@@ -16369,6 +16629,7 @@ void TurtleLuaEngine::CloseState()
     _itemGossipEvents.clear();
     _playerGossipEvents.clear();
     ClearAsyncQueries();
+    ClearHttpResponses();
     _timedEvents.clear();
 
     if (_state)
@@ -16516,6 +16777,7 @@ void TurtleLuaEngine::RegisterGlobals()
     lua_register(_state, "CharacterDBExecute", &LuaCharDBExecute);
     lua_register(_state, "AuthDBExecute", &LuaLoginDBExecute);
     lua_register(_state, "LoginDBExecute", &LuaLoginDBExecute);
+    lua_register(_state, "HttpRequest", &LuaHttpRequest);
     lua_register(_state, "PrintInfo", &LuaPrintInfo);
     lua_register(_state, "PrintError", &LuaPrintError);
     lua_register(_state, "PrintDebug", &LuaPrintDebug);

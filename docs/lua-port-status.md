@@ -69,6 +69,7 @@ E:\TurtleBY
 - Channel 基础对象封装：玩家频道聊天事件 `22` 现在按 3.3.5 Eluna 风格继续传频道数字 ID，并额外追加 `Channel` 对象；对象可读取频道名、频道 ID、人数、flags、安全等级、阵营、密码和成员状态，也能设置公告/密码/安全等级、设置成员主持/禁言、广播包或发送频道消息。
 - DynamicObject 基础对象封装：地图按 GUID 反查和通用 `WorldObject` 返回路径现在可以返回 `DynamicObject` 对象；脚本可读取施法者、施法者 GUID、法术 ID、效果索引、持续时间、半径和动态对象类型，也可调用 `Delay()` / `Delete()`。
 - ElunaQuery 数据库结果对象：`WorldDBQuery` / `CharDBQuery` / `AuthDBQuery` 等现在返回 `ElunaQuery` 对象，支持 3.3.5 Eluna 风格的 `GetUInt32(0)`、`GetString(0)`、`NextRow()`、`GetRow()` 等对象方法；列下标按 Eluna 从 `0` 开始。`WorldDBQueryAsync` / `CharDBQueryAsync` / `AuthDBQueryAsync` 也已接入，数据库线程完成后会切回 Lua 世界线程调用 callback。
+- HTTP 请求：`HttpRequest` 已按 3.3.5 Eluna 参数形式接入，HTTP 工作在线程里执行，完成后回到 Lua 世界线程调用 `(status, body, headers)` callback。
 - 全局兼容函数补齐：新增核心信息、Lua 状态信息、bit 位运算、毫秒时间、背包位置判断、日志打印、全局命令执行和全局定时事件清理入口。`GetCoreExpansion()` 按 Turtle 1.12 返回 `0`，`GetStateMap()` / `GetStateMapId()` / `GetStateInstanceId()` 按当前单 Lua 状态返回 `nil` / `-1` / `0`，`IsCompatibilityMode()` 返回 `true`。
 - 全局工具/管理函数补充：新增 `CreateLongLong`、`CreateULongLong`、`CreateInt64`、`CreateUint64`、`GetItemLink`、`GetAreaName`、`GetGuildByLeaderGUID`、`Kick`、`Ban`、`SaveAllPlayers`、`SendMail`、`AddVendorItem`、`VendorRemoveItem`、`VendorRemoveAllItems`。其中 `Ban()` 调用 Turtle 当前异步封禁流程，合法请求会先返回 `3` 表示已进入处理队列；`AddVendorItem` 的第 5 个参数在 Turtle 1.12 中按 `itemflags` 使用，不是 3.3.5 的 extended cost。
 - 全局游戏事件/地图/Gossip 函数补充：新增 `GetActiveGameEvents`、`IsGameEventActive`、`StartGameEvent`、`StopGameEvent`、`GetMapEntrance`、`GetGossipMenuOptionLocale`，均接入 Turtle 当前 `GameEventMgr` / `ObjectMgr` 真实接口。
@@ -256,6 +257,10 @@ CharDBExecute(sql)
 CharacterDBExecute(sql)
 AuthDBExecute(sql)
 LoginDBExecute(sql)
+HttpRequest(method, url, callback)
+HttpRequest(method, url, headers, callback)
+HttpRequest(method, url, body, contentType, callback)
+HttpRequest(method, url, body, contentType, headers, callback)
 PrintInfo(...)
 PrintError(...)
 PrintDebug(...)
@@ -313,6 +318,7 @@ print(...)
 - `LookupEntry("Spell", spellId)` / `LookupEntry("SpellEntry", spellId)` 返回只读 `SpellInfo` 对象；`LookupEntry("GemProperties", id)` 在 Turtle 1.12 当前返回空，因为 1.12 没有宝石 DBC 系统。
 - 数据库同步查询函数返回 `ElunaQuery` 对象，找不到结果时返回 `nil`；对象方法里的列下标按 3.3.5 Eluna 习惯从 `0` 开始。
 - 数据库异步查询函数会在数据库线程完成 SQL 后，把 callback 切回 Lua 世界线程执行；callback 参数为 `ElunaQuery` 或 `nil`，不会在数据库线程里直接调用 Lua。
+- `HttpRequest()` 支持 `GET`、`HEAD`、`POST`、`PUT`、`PATCH`、`DELETE`、`OPTIONS`；callback 参数为 `status, body, headers`。请求失败或 URL 无法解析时 `status` 为 `0`，`body` 中会带错误说明。
 - 数据库执行函数返回 `true` 或 `false`。
 
 ## ElunaQuery 方法
@@ -364,6 +370,29 @@ query:GetRow()
 - `NextRow()` 会移动到下一行；查询刚返回时已经位于第一行，不要在读取第一行前先调用 `NextRow()`。
 - `GetRow()` 返回当前行 table，同时支持 `row[1]` 这种 Lua 数组访问和 `row["字段名"]` 这种字段名访问。
 - `GetUInt64()` / `GetInt64()` 在 Lua 里以整数返回；如果脚本需要完全避免大整数精度差异，可以用 `GetString(column)` 自己处理。
+
+## HttpRequest
+
+`HttpRequest` 是异步 HTTP 客户端入口，支持 3.3.5 Eluna 的常见调用形式。请求在线程里执行，callback 回到 Lua 世界线程执行。
+
+```lua
+HttpRequest("GET", "https://example.com/", function(status, body, headers)
+    print(status, body)
+end)
+
+HttpRequest("POST", "https://example.com/api", "{\"ok\":true}", "application/json", {
+    Accept = "application/json"
+}, function(status, body, headers)
+    print(status, headers["content-type"] or "")
+end)
+```
+
+说明：
+
+- callback 参数固定为 `(status, body, headers)`。
+- `headers` 是响应头 table；重复响应头会按 Lua table 规则保留最后写入的值。
+- 请求失败或 URL 无法解析时 `status = 0`，`body` 里会放错误说明。
+- 如果请求完成前 Lua 状态重载或关闭，该回调会被丢弃，避免旧 Lua 引用误进新状态。
 
 可用的 `HighGuid` 常量：
 
@@ -2658,7 +2687,7 @@ end
 - 3.3.5 专属成就、竞技场点数、铭文/双天赋、LFG 和部分邮件/拍卖/银行/训练师细节目前仍是兼容返回或空入口，后续需要按 Turtle 1.12 的真实系统单独补强。
 - 3.3.5 玩家事件里 `45` 成就完成和 `50` LFG 入队检查没有 Turtle 1.12 等价系统，当前不接入。
 - 载具 Vehicle 对象和真实载具系统在 Turtle 1.12 中不存在，当前只有 `IsOnVehicle` / `GetVehicle` / `GetVehicleKit` 兼容空入口。
-- 全局公开函数剩余缺口为 `HttpRequest`；`RegisterEntryHelper`、`RegisterEventHelper`、`RegisterUniqueHelper`、`DBQueryAsync` 是 Eluna C++ 内部 helper，不是需要暴露给 Lua 脚本的公开 API。`WorldDBQueryAsync`、`CharDBQueryAsync` / `CharacterDBQueryAsync`、`AuthDBQueryAsync` / `LoginDBQueryAsync` 已接入，callback 会回到 Lua 世界线程执行。
+- 3.3.5 参考模块的全局公开函数当前已对齐；`RegisterEntryHelper`、`RegisterEventHelper`、`RegisterUniqueHelper`、`DBQueryAsync` 是 Eluna C++ 内部 helper，不是需要暴露给 Lua 脚本的公开 API。`WorldDBQueryAsync`、`CharDBQueryAsync` / `CharacterDBQueryAsync`、`AuthDBQueryAsync` / `LoginDBQueryAsync`、`HttpRequest` 已接入，callback 会回到 Lua 世界线程执行。
 
 ## 335 专属功能说明
 

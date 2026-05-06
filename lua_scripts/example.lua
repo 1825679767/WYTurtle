@@ -12,6 +12,10 @@ end)
 --         print("Async query returned no rows")
 --     end
 -- end)
+--
+-- HttpRequest("GET", "https://example.com/", function(status, body, headers)
+--     print("HTTP status=" .. status .. " content-type=" .. (headers["content-type"] or ""))
+-- end)
 
 RegisterServerEvent(13, function(event, diff)
     -- World update event is intentionally quiet; use CreateLuaEvent for normal timers.
