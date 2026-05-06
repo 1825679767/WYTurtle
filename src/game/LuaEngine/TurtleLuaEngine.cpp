@@ -10355,6 +10355,13 @@ int CreatureSetDisableReputationGain(lua_State* state)
     return 0;
 }
 
+int CreatureIsDamageEnoughForLootingAndReward(lua_State* state)
+{
+    Creature* creature = CheckCreature(state, 1);
+    lua_pushboolean(state, creature && creature->IsLootAllowedDueToDamageOrigin());
+    return 1;
+}
+
 int CreatureGetLootMode(lua_State* state)
 {
     (void)CheckCreature(state, 1);
@@ -17808,7 +17815,7 @@ void TurtleLuaEngine::RegisterCreatureMetatable()
     SetMethod(_state, "IsCivilian", &CreatureIsCivilian);
     SetMethod(_state, "IsRacialLeader", &CreatureIsRacialLeader);
     SetMethod(_state, "IsTrigger", &CreatureIsTrigger);
-    SetMethod(_state, "IsDamageEnoughForLootingAndReward", &CreatureCompatReturnFalse);
+    SetMethod(_state, "IsDamageEnoughForLootingAndReward", &CreatureIsDamageEnoughForLootingAndReward);
     SetMethod(_state, "CanStartAttack", &CreatureCanStartAttack);
     SetMethod(_state, "HasLootMode", &CreatureHasLootMode);
     SetMethod(_state, "IsDungeonBoss", &CreatureIsDungeonBoss);
