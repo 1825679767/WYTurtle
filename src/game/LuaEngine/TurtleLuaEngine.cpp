@@ -11108,15 +11108,52 @@ int GameObjectGetLootState(lua_State* state)
 
 int GameObjectGetLootRecipient(lua_State* state)
 {
-    (void)CheckGameObject(state, 1);
-    lua_pushnil(state);
+    auto* engine = GetEngine(state);
+    GameObject* go = CheckGameObject(state, 1);
+    Player* player = nullptr;
+
+    if (go)
+    {
+        if (Unit* owner = go->GetOwner())
+            if (owner->GetTypeId() == TYPEID_PLAYER)
+                player = static_cast<Player*>(owner);
+
+        if (!player)
+        {
+            ObjectGuid looterGuid = go->GetSingleAllowedLooterGuid();
+            if (!looterGuid.IsEmpty())
+                player = ObjectAccessor::FindPlayer(looterGuid);
+        }
+    }
+
+    if (engine)
+        engine->PushPlayer(player);
+    else
+        lua_pushnil(state);
     return 1;
 }
 
 int GameObjectGetLootRecipientGroup(lua_State* state)
 {
-    (void)CheckGameObject(state, 1);
-    lua_pushnil(state);
+    auto* engine = GetEngine(state);
+    GameObject* go = CheckGameObject(state, 1);
+    Group* group = nullptr;
+
+    if (go)
+    {
+        if (go->GetOwnerGroupId())
+            group = sObjectMgr.GetGroupById(go->GetOwnerGroupId());
+
+        if (!group)
+            if (Unit* owner = go->GetOwner())
+                if (owner->GetTypeId() == TYPEID_PLAYER)
+                    group = static_cast<Player*>(owner)->GetGroup();
+    }
+
+    if (engine)
+        engine->PushGroup(group);
+    else
+        lua_pushnil(state);
     return 1;
 }
 

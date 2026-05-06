@@ -839,6 +839,8 @@ class GameObject : public WorldObject
         bool PlayerCanUse(Player* pPlayer);
         bool IsAllowedLooter(ObjectGuid guid);
         void SetOwnerGroupId(uint32 groupId) { m_playerGroupId = groupId; }
+        uint32 GetOwnerGroupId() const { return m_playerGroupId; }
+        ObjectGuid GetSingleAllowedLooterGuid() const { return m_allowedLooters.size() == 1 ? *m_allowedLooters.begin() : ObjectGuid(); }
 
         // Gestion des GameObjectAI
         void AIM_Initialize();

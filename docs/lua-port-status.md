@@ -63,7 +63,7 @@ E:\TurtleBY
 - Quest 兼容补齐：`HasFlag`、`IsDaily`、`GetNextQuestId`、`GetPrevQuestId`、`GetNextQuestInChain`、`GetType`。
 - Map 兼容补齐：`IsArena`、`IsEmpty`、`IsHeroic`、`GetDifficulty`、`GetHeight`、`GetAreaId`、`GetCreatures`、`GetCreaturesByAreaId`、`GetPlayers`、`GetPlayerCount`、`SetWeather`、`GetInstanceData`、`SaveInstanceData`。其中 `GetCreatures()` / `GetCreaturesByAreaId()` 现在可以枚举普通大陆地图和副本地图，不再只限副本；`GetPlayers([team])` 和 `GetPlayerCount([team])` 支持按 `TEAM_ALLIANCE` / `TEAM_HORDE` 过滤，`GetPlayerCount()` 按 Eluna 语义不统计 GM。
 - InstanceData 基础对象封装：`Map:GetInstanceData()` 现在会返回 Turtle 副本脚本对象，支持 `GetData` / `SetData` / `GetData64` / `SetData64` / `GetGuid` / `SetGuid` / `SaveToDB` 等核心真实入口。
-- GameObject 兼容补齐：`HasQuest`、`IsTransport`、`IsActive`、`IsDestructible`、`GetLootRecipient`、`GetLootRecipientGroup`、`AddLoot`、`SaveToDB`、`RemoveFromWorld`、`UseDoorOrButton`、`Despawn`、`SetRespawnTime`。
+- GameObject 兼容补齐：`HasQuest`、`IsTransport`、`IsActive`、`IsDestructible`、`GetLootRecipient`、`GetLootRecipientGroup`、`AddLoot`、`SaveToDB`、`RemoveFromWorld`、`UseDoorOrButton`、`Despawn`、`SetRespawnTime`。其中 `GetLootRecipient()` 会优先返回 GameObject 创建者玩家，其次在只有一个允许拾取者时返回该在线玩家；`GetLootRecipientGroup()` 会返回核心记录的拥有队伍，或创建者玩家当前队伍。
 - ItemTemplate 图标补齐：核心现在加载 `ItemDisplayInfo.dbc` 的物品图标字段，`template:GetIcon()` 会按物品 `DisplayInfoID` 返回真实图标名，例如 `INV_Misc_QuestionMark` 这一类客户端图标路径名。
 - Spell 兼容补齐：`IsAutoRepeat`、`SetAutoRepeat`、`Cast`、`Finish`、`GetDuration`、`GetReagentCost`、`GetTargetDest`。
 - Group 兼容补齐：`GetGUID`、`GetMemberGUID`、`GetGroupType`、`IsLFGGroup`、`IsBFGroup`、`IsAssistant`、`SameSubGroup`、`HasFreeSlotSubGroup`、`SetLeader`、`AddMember`、`RemoveMember`、`Disband`、`ConvertToRaid`、`ConvertToLFG`、`SetMembersGroup`、`SetTargetIcon`、`SetMemberFlag`、`SendPacket`。其中 `IsBFGroup()` 在 Turtle 1.12 中按战场队伍 `isBGGroup()` 近似判断，`ConvertToLFG()` 仍是兼容 no-op，因为 1.12 LFG 入队需要具体集合石/区域 ID。
@@ -1750,7 +1750,7 @@ gameobject:RemoveFromWorld(deleteFromDB)
 说明：
 
 - `gameobject:GetTemplate()` / `gameobject:GetGameObjectInfo()` / `gameobject:GetGOInfo()` 返回只读 `GameObjectTemplate` 模板对象。
-- `GetLootRecipient()` / `GetLootRecipientGroup()` 当前先返回 `nil`。Turtle 1.12 的 GameObject 只公开允许拾取判断，没有 3.3.5 Eluna 那种直接取原始拾取玩家/队伍的公开接口。
+- `GetLootRecipient()` / `GetLootRecipientGroup()` 当前使用 Turtle 1.12 可公开取得的信息做近似：优先返回 GameObject 创建者玩家/创建者队伍；如果对象只有一个允许拾取者，则返回该在线玩家。没有可确认归属时返回 `nil`。
 - `AddLoot(itemEntry, amount, ...)` 会把固定物品加入当前 GameObject 的临时 loot，返回值为兼容占位的 `0`。Turtle 这里不是立即创建真实背包物品实例，所以没有可返回的真实物品 GUID。
 - `IsDestructible()` 当前返回 `false`，因为 Turtle 1.12 没有 3.3.5 的可破坏建筑 GameObject 系统。
 - `RemoveFromWorld(deleteFromDB)` 会把对象从世界移除；`deleteFromDB=true` 时还会删除数据库记录。这个接口会让当前对象指针失效，脚本里调用后不要继续使用同一个 `gameobject` 变量。
