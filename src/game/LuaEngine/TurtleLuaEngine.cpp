@@ -161,6 +161,17 @@ uint32 LuaPlayerSettingValue(Player* player, char const* source, uint32 index)
     return static_cast<uint32>(parsed);
 }
 
+uint32 LuaAchievementGeneration(Player* player)
+{
+    uint32 generation = LuaPlayerSettingValue(player, "eluna.compat.achievement_generation", 0);
+    return generation ? generation : 1;
+}
+
+bool LuaHasAchievement(Player* player, uint32 achievementId)
+{
+    return player && achievementId && LuaPlayerSettingValue(player, "eluna.compat.achievement", achievementId) == LuaAchievementGeneration(player);
+}
+
 uint32 ClampLuaIntegerToUInt32(lua_Integer value)
 {
     if (value <= 0)
@@ -5956,6 +5967,56 @@ int PlayerGetArenaPoints(lua_State* state)
 {
     Player* player = CheckPlayer(state, 1);
     lua_pushinteger(state, LuaPlayerSettingValue(player, "eluna.compat.arena_points", 0));
+    return 1;
+}
+
+int PlayerHasAchieved(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    uint32 achievementId = ClampLuaIntegerToUInt32(luaL_checkinteger(state, 2));
+    lua_pushboolean(state, LuaHasAchievement(player, achievementId));
+    return 1;
+}
+
+int PlayerSetAchievement(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    uint32 achievementId = ClampLuaIntegerToUInt32(luaL_checkinteger(state, 2));
+    if (!player || !achievementId || LuaHasAchievement(player, achievementId))
+        return 0;
+
+    uint32 count = LuaPlayerSettingValue(player, "eluna.compat.achievement_count", 0);
+    SetLuaPlayerSettingValue(player, "eluna.compat.achievement", achievementId, LuaAchievementGeneration(player));
+    SetLuaPlayerSettingValue(player, "eluna.compat.achievement_count", 0,
+        count == std::numeric_limits<uint32>::max() ? count : count + 1);
+    return 0;
+}
+
+int PlayerResetAchievements(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    if (!player)
+        return 0;
+
+    uint32 generation = LuaAchievementGeneration(player);
+    SetLuaPlayerSettingValue(player, "eluna.compat.achievement_generation", 0,
+        generation == std::numeric_limits<uint32>::max() ? generation : generation + 1);
+    SetLuaPlayerSettingValue(player, "eluna.compat.achievement_count", 0, 0);
+    return 0;
+}
+
+int PlayerGetCompletedAchievementsCount(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    (void)lua_toboolean(state, 2);
+    lua_pushinteger(state, LuaPlayerSettingValue(player, "eluna.compat.achievement_count", 0));
+    return 1;
+}
+
+int PlayerGetAchievementPoints(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    lua_pushinteger(state, LuaPlayerSettingValue(player, "eluna.compat.achievement_count", 0));
     return 1;
 }
 
@@ -18224,12 +18285,12 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "CanUninviteFromGroup", &PlayerCanUninviteFromGroup);
     SetMethod(_state, "EquipItem", &PlayerEquipItem);
     SetMethod(_state, "GetAchievementCriteriaProgress", &PlayerCompatReturnNil);
-    SetMethod(_state, "GetAchievementPoints", &PlayerCompatReturnZero);
+    SetMethod(_state, "GetAchievementPoints", &PlayerGetAchievementPoints);
     SetMethod(_state, "GetActiveSpec", &PlayerGetActiveSpec);
     SetMethod(_state, "GetArenaPoints", &PlayerGetArenaPoints);
     SetMethod(_state, "GetBonusTalentCount", &PlayerGetBonusTalentCount);
     SetMethod(_state, "GetChampioningFaction", &PlayerCompatReturnZero);
-    SetMethod(_state, "GetCompletedAchievementsCount", &PlayerCompatReturnZero);
+    SetMethod(_state, "GetCompletedAchievementsCount", &PlayerGetCompletedAchievementsCount);
     SetMethod(_state, "GetCompletedQuestsCount", &PlayerGetCompletedQuestsCount);
     SetMethod(_state, "GetCorpse", &PlayerGetCorpse);
     SetMethod(_state, "GetDifficulty", &PlayerGetDifficulty);
@@ -18250,7 +18311,7 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "GossipSendPOI", &PlayerGossipSendPOI);
     SetMethod(_state, "GroupCreate", &PlayerGroupCreate);
     SetMethod(_state, "GroupInvite", &PlayerGroupInvite);
-    SetMethod(_state, "HasAchieved", &PlayerCompatReturnFalse);
+    SetMethod(_state, "HasAchieved", &PlayerHasAchieved);
     SetMethod(_state, "HasCasterSpec", &PlayerHasCasterSpec);
     SetMethod(_state, "HasHealSpec", &PlayerHasHealSpec);
     SetMethod(_state, "HasPendingBind", &PlayerCompatReturnFalse);
@@ -18275,7 +18336,7 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "RemovedInsignia", &PlayerRemovedInsignia);
     SetMethod(_state, "RemoveFromBattlegroundRaid", &PlayerRemoveFromBattlegroundRaid);
     SetMethod(_state, "RemoveFromGroup", &PlayerRemoveFromGroup);
-    SetMethod(_state, "ResetAchievements", &PlayerCompatNoop);
+    SetMethod(_state, "ResetAchievements", &PlayerResetAchievements);
     SetMethod(_state, "RemovePet", &PlayerRemovePet);
     SetMethod(_state, "ResetPetTalents", &PlayerResetPetTalents);
     SetMethod(_state, "ResetTalentsCost", &PlayerResetTalentsCost);
@@ -18293,7 +18354,7 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "SendTabardVendorActivate", &PlayerSendTabardVendorActivate);
     SetMethod(_state, "SendTaxiMenu", &PlayerSendTaxiMenu);
     SetMethod(_state, "SendTrainerList", &PlayerSendTrainerList);
-    SetMethod(_state, "SetAchievement", &PlayerCompatNoop);
+    SetMethod(_state, "SetAchievement", &PlayerSetAchievement);
     SetMethod(_state, "SetArenaPoints", &PlayerSetArenaPoints);
     SetMethod(_state, "SetBonusTalentCount", &PlayerSetBonusTalentCount);
     SetMethod(_state, "SetFactionForRace", &PlayerSetFactionForRace);
