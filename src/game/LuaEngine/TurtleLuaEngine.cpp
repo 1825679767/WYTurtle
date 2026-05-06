@@ -9799,6 +9799,22 @@ int CreatureSetUnitFlags(lua_State* state)
     return 0;
 }
 
+int CreatureGetUnitFlagsTwo(lua_State* state)
+{
+    Creature* creature = CheckCreature(state, 1);
+    lua_pushinteger(state, creature ? creature->GetLuaUnitFlagsTwo() : 0);
+    return 1;
+}
+
+int CreatureSetUnitFlagsTwo(lua_State* state)
+{
+    Creature* creature = CheckCreature(state, 1);
+    uint32 flags = static_cast<uint32>(luaL_checkinteger(state, 2));
+    if (creature)
+        creature->SetLuaUnitFlagsTwo(flags);
+    return 0;
+}
+
 int CreatureGetCreatureFamily(lua_State* state)
 {
     Creature* creature = CheckCreature(state, 1);
@@ -17876,14 +17892,14 @@ void TurtleLuaEngine::RegisterCreatureMetatable()
     SetMethod(_state, "GetAITargetsCount", &CreatureGetAITargetsCount);
     SetMethod(_state, "GetNPCFlags", &CreatureGetNPCFlags);
     SetMethod(_state, "GetUnitFlags", &CreatureGetUnitFlags);
-    SetMethod(_state, "GetUnitFlagsTwo", &CreatureCompatReturnZero);
+    SetMethod(_state, "GetUnitFlagsTwo", &CreatureGetUnitFlagsTwo);
     SetMethod(_state, "GetExtraFlags", &CreatureGetExtraFlags);
     SetMethod(_state, "GetRank", &CreatureGetRank);
     SetMethod(_state, "GetShieldBlockValue", &CreatureGetShieldBlockValue);
     SetMethod(_state, "GetLootMode", &CreatureGetLootMode);
     SetMethod(_state, "SetNPCFlags", &CreatureSetNPCFlags);
     SetMethod(_state, "SetUnitFlags", &CreatureSetUnitFlags);
-    SetMethod(_state, "SetUnitFlagsTwo", &CreatureCompatNoop);
+    SetMethod(_state, "SetUnitFlagsTwo", &CreatureSetUnitFlagsTwo);
     SetMethod(_state, "SetReactState", &CreatureSetReactState);
     SetMethod(_state, "SetDisableGravity", &CreatureSetDisableGravity);
     SetMethod(_state, "SetLootMode", &CreatureSetLootMode);
