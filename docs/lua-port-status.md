@@ -73,6 +73,7 @@ E:\TurtleBY
 - 全局工具/管理函数补充：新增 `CreateLongLong`、`CreateULongLong`、`GetItemLink`、`GetAreaName`、`GetGuildByLeaderGUID`、`Kick`、`Ban`、`SaveAllPlayers`、`SendMail`、`AddVendorItem`、`VendorRemoveItem`、`VendorRemoveAllItems`。其中 `Ban()` 调用 Turtle 当前异步封禁流程，合法请求会先返回 `3` 表示已进入处理队列；`AddVendorItem` 的第 5 个参数在 Turtle 1.12 中按 `itemflags` 使用，不是 3.3.5 的 extended cost。
 - 全局游戏事件/地图/Gossip 函数补充：新增 `GetActiveGameEvents`、`IsGameEventActive`、`StartGameEvent`、`StopGameEvent`、`GetMapEntrance`、`GetGossipMenuOptionLocale`，均接入 Turtle 当前 `GameEventMgr` / `ObjectMgr` 真实接口。
 - 全局版本兼容占位：新增 `GetOwnerHalaa` / `SetOwnerHalaa`，Turtle 1.12 没有 TBC/WotLK 的纳格兰 Halaa 系统，因此当前只保持脚本兼容，不改变游戏状态。
+- 全局动态出生函数补充：新增 `PerformIngameSpawn`，支持临时/保存的生物和游戏物体出生；临时出生走地图召唤接口，保存出生走 Turtle 现有静态 GUID、保存到 DB、加入网格的路径。
 - SpellInfo 3.3.5 参考方法名补齐：`HasAreaAuraEffect`、`IsAffectingArea`、`IsTargetingArea`、`NeedsExplicitUnitTarget`、`GetSpellSpecific`、`GetDispelMask`、`CheckTarget`、`CheckExplicitTarget` 等。当前 `SpellInfoMethods.h` 参考方法差异为 `missing=0`，其中部分检查按 Turtle 1.12 能力做兼容近似。
 - SpellEntry 旧接口兼容补齐：`SpellEntryMethods.h` 的 92 个参考方法名已经并入 `SpellInfo` 元表，当前差异扫描为 `ref=92 target=165 missing=0`。本批补上了 `GetSpellName`、`GetDurationIndex`、`GetManaCostPerlevel`、`GetManaPerSecond`、`GetEquippedItemClass`、`GetEffectRealPointsPerLevel`、`GetEffectRadiusIndex`、`GetEffectDamageMultiplier`、`GetEffectBonusMultiplier`、`GetTotemCategory`、`GetAreaGroupId`、`GetRuneCostID` 等兼容入口；WotLK 专属字段按 Turtle 1.12 能力返回 `0` 或全 0 table。
 
@@ -208,6 +209,7 @@ GetGuildByLeaderGUID(guid)
 GetPlayersInWorld()
 GetPlayerCount()
 GetMapById(mapId, instanceId)
+PerformIngameSpawn(spawnType, entry, mapId, instanceId, x, y, z, o[, save[, durationOrRespawn[, phaseMask]]])
 AddVendorItem(creatureEntry, itemEntry[, maxCount[, incrTime[, itemFlags]]])
 VendorRemoveItem(creatureEntry, itemEntry)
 VendorRemoveAllItems(creatureEntry)
@@ -253,6 +255,7 @@ print(...)
 - `GetPlayersInWorld()` 返回当前在线且在世界中的玩家对象数组。
 - `GetPlayerCount()` 返回当前在线且在世界中的玩家数量。
 - `GetMapById(mapId, instanceId)` 只查找已经加载的地图，找不到时返回 `nil`。
+- `PerformIngameSpawn(1, ...)` 出生生物，`PerformIngameSpawn(2, ...)` 出生游戏物体；`save=true` 会写入 world 数据库，`durationOrRespawn` 对临时出生表示消失时间、对保存出生表示重生时间，`phaseMask` 当前映射到 Turtle 的 world mask。
 - `GetPlayerByGUID()` 现在可以传 `ObjectGuid` 对象，也可以继续传玩家 `guidLow` 数字。
 - `GetPlayerByGUIDLow(guidLow)` 是按玩家低位 GUID 找在线玩家的兼容别名。
 - `CreateObjectGuid(high, counter)` 用于没有 entry 部分的 GUID，例如玩家和物品。

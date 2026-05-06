@@ -2979,6 +2979,150 @@ int LuaGetMapById(lua_State* state)
     return 1;
 }
 
+int LuaPerformIngameSpawn(lua_State* state)
+{
+    auto* engine = GetEngine(state);
+    int spawnType = static_cast<int>(luaL_checkinteger(state, 1));
+    uint32 entry = static_cast<uint32>(luaL_checkinteger(state, 2));
+    uint32 mapId = static_cast<uint32>(luaL_checkinteger(state, 3));
+    uint32 instanceId = static_cast<uint32>(luaL_checkinteger(state, 4));
+    float x = static_cast<float>(luaL_checknumber(state, 5));
+    float y = static_cast<float>(luaL_checknumber(state, 6));
+    float z = static_cast<float>(luaL_checknumber(state, 7));
+    float o = static_cast<float>(luaL_checknumber(state, 8));
+    bool save = lua_isnoneornil(state, 9) ? false : lua_toboolean(state, 9) != 0;
+    uint32 durationOrRespawn = static_cast<uint32>(luaL_optinteger(state, 10, 0));
+    uint32 phase = static_cast<uint32>(luaL_optinteger(state, 11, 1));
+
+    if (!phase)
+    {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    Map* map = sMapMgr.FindMap(mapId, instanceId);
+    if (!map)
+    {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    if (spawnType == 1)
+    {
+        Creature* creature = nullptr;
+        if (save)
+        {
+            CreatureInfo const* cinfo = sObjectMgr.GetCreatureTemplate(entry);
+            if (!cinfo)
+            {
+                lua_pushnil(state);
+                return 1;
+            }
+
+            uint32 lowGuid = sObjectMgr.GenerateStaticCreatureLowGuid();
+            if (!lowGuid)
+            {
+                lua_pushnil(state);
+                return 1;
+            }
+
+            creature = new Creature();
+            CreatureCreatePos pos(map, x, y, z, o);
+            if (!creature->Create(lowGuid, pos, cinfo, entry))
+            {
+                delete creature;
+                lua_pushnil(state);
+                return 1;
+            }
+
+            if (durationOrRespawn)
+                creature->SetRespawnDelay(durationOrRespawn);
+            creature->SetWorldMask(phase);
+            creature->SaveToDB(map->GetId());
+            lowGuid = creature->GetGUIDLow();
+
+            if (!creature->LoadFromDB(lowGuid, map))
+            {
+                delete creature;
+                lua_pushnil(state);
+                return 1;
+            }
+
+            creature->SetWorldMask(phase);
+            map->Add(creature);
+            sObjectMgr.AddCreatureToGrid(lowGuid, sObjectMgr.GetCreatureData(lowGuid));
+        }
+        else
+        {
+            TempSummonType summonType = durationOrRespawn ? TEMPSUMMON_TIMED_OR_DEAD_DESPAWN : TEMPSUMMON_MANUAL_DESPAWN;
+            creature = map->SummonCreature(entry, x, y, z, o, summonType, durationOrRespawn);
+            if (creature)
+                creature->SetWorldMask(phase);
+        }
+
+        if (engine)
+            engine->PushCreature(creature);
+        else
+            lua_pushnil(state);
+        return 1;
+    }
+
+    if (spawnType == 2)
+    {
+        GameObjectInfo const* info = sObjectMgr.GetGameObjectInfo(entry);
+        if (!info || (info->displayId && !sGameObjectDisplayInfoStore.LookupEntry(info->displayId)))
+        {
+            lua_pushnil(state);
+            return 1;
+        }
+
+        GameObject* go = nullptr;
+        if (save)
+        {
+            uint32 lowGuid = sObjectMgr.GenerateStaticGameObjectLowGuid();
+            if (!lowGuid)
+            {
+                lua_pushnil(state);
+                return 1;
+            }
+
+            go = new GameObject();
+            if (!go->Create(lowGuid, entry, map, x, y, z, o, 0.0f, 0.0f, 0.0f, 0.0f, GO_ANIMPROGRESS_DEFAULT, GO_STATE_READY))
+            {
+                delete go;
+                lua_pushnil(state);
+                return 1;
+            }
+
+            go->SetWorldMask(phase);
+            go->SetRespawnTime(durationOrRespawn ? durationOrRespawn : 300);
+            go->SaveToDB(map->GetId());
+
+            if (!go->LoadFromDB(lowGuid, map))
+            {
+                delete go;
+                lua_pushnil(state);
+                return 1;
+            }
+
+            go->SetWorldMask(phase);
+            map->Add(go);
+            sObjectMgr.AddGameobjectToGrid(lowGuid, sObjectMgr.GetGOData(lowGuid));
+        }
+        else
+            go = map->SummonGameObject(entry, x, y, z, o, 0.0f, 0.0f, 0.0f, 0.0f, durationOrRespawn, phase);
+
+        if (engine)
+            engine->PushGameObject(go);
+        else
+            lua_pushnil(state);
+        return 1;
+    }
+
+    lua_pushnil(state);
+    return 1;
+}
+
 int ObjectGetEntry(lua_State* state)
 {
     Object* object = CheckObject(state, 1);
@@ -15432,6 +15576,7 @@ void TurtleLuaEngine::RegisterGlobals()
     lua_register(_state, "GetPlayersInWorld", &LuaGetPlayersInWorld);
     lua_register(_state, "GetPlayerCount", &LuaGetPlayerCount);
     lua_register(_state, "GetMapById", &LuaGetMapById);
+    lua_register(_state, "PerformIngameSpawn", &LuaPerformIngameSpawn);
     lua_register(_state, "AddVendorItem", &LuaAddVendorItem);
     lua_register(_state, "VendorRemoveItem", &LuaVendorRemoveItem);
     lua_register(_state, "VendorRemoveAllItems", &LuaVendorRemoveAllItems);
