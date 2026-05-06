@@ -953,6 +953,24 @@ int LuaRegisterServerEvent(lua_State* state)
     return 0;
 }
 
+int LuaRegisterPacketEvent(lua_State* state)
+{
+    auto* engine = GetEngine(state);
+    if (!engine)
+        return luaL_error(state, "Lua engine is not available");
+
+    uint32 opcode = static_cast<uint32>(luaL_checkinteger(state, 1));
+    if (opcode >= NUM_MSG_TYPES)
+        return luaL_argerror(state, 1, "valid opcode expected");
+
+    uint32 eventId = static_cast<uint32>(luaL_checkinteger(state, 2));
+    luaL_checktype(state, 3, LUA_TFUNCTION);
+    lua_pushvalue(state, 3);
+    int functionRef = luaL_ref(state, LUA_REGISTRYINDEX);
+    engine->RegisterPacketEvent(opcode, eventId, functionRef);
+    return 0;
+}
+
 int RegisterEntryEvent(lua_State* state, void (TurtleLuaEngine::*registrar)(uint32, uint32, int))
 {
     auto* engine = GetEngine(state);
@@ -1024,6 +1042,22 @@ int LuaClearServerEvents(lua_State* state)
     bool allEvents = lua_isnoneornil(state, 1);
     uint32 eventId = allEvents ? 0 : static_cast<uint32>(luaL_checkinteger(state, 1));
     engine->ClearServerEvents(eventId, allEvents);
+    return 0;
+}
+
+int LuaClearPacketEvents(lua_State* state)
+{
+    auto* engine = GetEngine(state);
+    if (!engine)
+        return luaL_error(state, "Lua engine is not available");
+
+    uint32 opcode = static_cast<uint32>(luaL_checkinteger(state, 1));
+    if (opcode >= NUM_MSG_TYPES)
+        return luaL_argerror(state, 1, "valid opcode expected");
+
+    bool allEvents = lua_isnoneornil(state, 2);
+    uint32 eventId = allEvents ? 0 : static_cast<uint32>(luaL_checkinteger(state, 2));
+    engine->ClearPacketEvents(opcode, eventId, allEvents);
     return 0;
 }
 
@@ -14059,6 +14093,7 @@ void TurtleLuaEngine::CloseState()
     _gameObjectEvents.clear();
     _itemEvents.clear();
     _spellEvents.clear();
+    _packetEvents.clear();
     _creatureGossipEvents.clear();
     _gameObjectGossipEvents.clear();
     _itemGossipEvents.clear();
@@ -14075,6 +14110,7 @@ void TurtleLuaEngine::RegisterGlobals()
 {
     lua_register(_state, "RegisterPlayerEvent", &LuaRegisterPlayerEvent);
     lua_register(_state, "RegisterServerEvent", &LuaRegisterServerEvent);
+    lua_register(_state, "RegisterPacketEvent", &LuaRegisterPacketEvent);
     lua_register(_state, "RegisterCreatureEvent", &LuaRegisterCreatureEvent);
     lua_register(_state, "RegisterGameObjectEvent", &LuaRegisterGameObjectEvent);
     lua_register(_state, "RegisterItemEvent", &LuaRegisterItemEvent);
@@ -14084,6 +14120,7 @@ void TurtleLuaEngine::RegisterGlobals()
     lua_register(_state, "RegisterItemGossipEvent", &LuaRegisterItemGossipEvent);
     lua_register(_state, "ClearPlayerEvents", &LuaClearPlayerEvents);
     lua_register(_state, "ClearServerEvents", &LuaClearServerEvents);
+    lua_register(_state, "ClearPacketEvents", &LuaClearPacketEvents);
     lua_register(_state, "ClearCreatureEvents", &LuaClearCreatureEvents);
     lua_register(_state, "ClearGameObjectEvents", &LuaClearGameObjectEvents);
     lua_register(_state, "ClearItemEvents", &LuaClearItemEvents);
@@ -16354,6 +16391,11 @@ void TurtleLuaEngine::RegisterSpellEvent(uint32 entry, uint32 eventId, int funct
     _spellEvents[entry][eventId].push_back(functionRef);
 }
 
+void TurtleLuaEngine::RegisterPacketEvent(uint32 opcode, uint32 eventId, int functionRef)
+{
+    _packetEvents[opcode][eventId].push_back(functionRef);
+}
+
 void TurtleLuaEngine::RegisterCreatureGossipEvent(uint32 entry, uint32 eventId, int functionRef)
 {
     _creatureGossipEvents[entry][eventId].push_back(functionRef);
@@ -16397,6 +16439,11 @@ void TurtleLuaEngine::ClearItemEvents(uint32 entry, uint32 eventId, bool allEven
 void TurtleLuaEngine::ClearSpellEvents(uint32 entry, uint32 eventId, bool allEvents)
 {
     ClearEntryEventStore(_state, _spellEvents, entry, eventId, allEvents);
+}
+
+void TurtleLuaEngine::ClearPacketEvents(uint32 opcode, uint32 eventId, bool allEvents)
+{
+    ClearEntryEventStore(_state, _packetEvents, opcode, eventId, allEvents);
 }
 
 void TurtleLuaEngine::ClearCreatureGossipEvents(uint32 entry, uint32 eventId, bool allEvents)
@@ -16722,6 +16769,69 @@ bool TurtleLuaEngine::CallPlayerEvent(uint32 eventId, Player* player)
     }
 
     return true;
+}
+
+bool TurtleLuaEngine::CallPacketFunctionRefs(std::vector<int> const& functionRefs, uint32 eventId, WorldPacket& packet, Player* player, char const* context)
+{
+    bool allow = true;
+
+    for (int functionRef : functionRefs)
+    {
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        lua_pushinteger(_state, eventId);
+        PushWorldPacketValue(_state, new WorldPacket(packet), true);
+        PushPlayer(player);
+
+        if (lua_pcall(_state, 3, 2, 0) != LUA_OK)
+        {
+            LogError(context);
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        if (lua_isboolean(_state, -2) && !lua_toboolean(_state, -2))
+            allow = false;
+
+        if (auto* holder = static_cast<LuaWorldPacket*>(luaL_testudata(_state, -1, WORLDPACKET_METATABLE)))
+        {
+            if (holder->packet)
+                packet = *holder->packet;
+        }
+
+        lua_pop(_state, 2);
+    }
+
+    return allow;
+}
+
+bool TurtleLuaEngine::CallServerPacketEvent(uint32 eventId, WorldPacket& packet, Player* player, char const* context)
+{
+    auto itr = _serverEvents.find(eventId);
+    if (itr == _serverEvents.end())
+        return true;
+
+    std::vector<int> functionRefs = itr->second;
+    return CallPacketFunctionRefs(functionRefs, eventId, packet, player, context);
+}
+
+bool TurtleLuaEngine::CallPacketEvent(uint32 opcode, uint32 eventId, WorldPacket& packet, Player* player, char const* context)
+{
+    auto opcodeItr = _packetEvents.find(opcode);
+    if (opcodeItr == _packetEvents.end())
+        return true;
+
+    auto eventItr = opcodeItr->second.find(eventId);
+    if (eventItr == opcodeItr->second.end())
+        return true;
+
+    std::vector<int> functionRefs = eventItr->second;
+    return CallPacketFunctionRefs(functionRefs, eventId, packet, player, context);
 }
 
 void TurtleLuaEngine::CallServerEvent(uint32 eventId)
@@ -18064,6 +18174,44 @@ void TurtleLuaEngine::OnPlayerGroupRollRewardItem(Player* player, Item* item, ui
             lua_pop(_state, 1);
         }
     }
+}
+
+bool TurtleLuaEngine::OnPacketReceive(WorldSession* session, WorldPacket& packet)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled())
+        return true;
+
+    Player* player = session ? session->GetPlayer() : nullptr;
+    bool allow = true;
+
+    if (!CallServerPacketEvent(SERVER_EVENT_ON_PACKET_RECEIVE, packet, player, "server packet receive event"))
+        allow = false;
+
+    if (!CallPacketEvent(packet.GetOpcode(), PACKET_EVENT_ON_PACKET_RECEIVE, packet, player, "packet receive event"))
+        allow = false;
+
+    return allow;
+}
+
+bool TurtleLuaEngine::OnPacketSend(WorldSession* session, WorldPacket& packet)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled())
+        return true;
+
+    Player* player = session ? session->GetPlayer() : nullptr;
+    bool allow = true;
+
+    if (!CallServerPacketEvent(SERVER_EVENT_ON_PACKET_SEND, packet, player, "server packet send event"))
+        allow = false;
+
+    if (!CallPacketEvent(packet.GetOpcode(), PACKET_EVENT_ON_PACKET_SEND, packet, player, "packet send event"))
+        allow = false;
+
+    return allow;
 }
 
 void TurtleLuaEngine::OnPlayerBGDesertion(Player* player, uint32 type)

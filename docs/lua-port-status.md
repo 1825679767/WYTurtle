@@ -64,7 +64,7 @@ E:\TurtleBY
 - Group 兼容补齐：`GetGUID`、`GetMemberGUID`、`GetGroupType`、`IsLFGGroup`、`IsAssistant`、`SameSubGroup`、`HasFreeSlotSubGroup`、`SetLeader`、`AddMember`、`RemoveMember`、`Disband`、`ConvertToRaid`、`SetMembersGroup`、`SetTargetIcon`、`SetMemberFlag`、`SendPacket`。
 - Roll 基础对象封装：玩家事件 `56` 的最后一个参数现在返回 `Roll` 对象，不再是 `nil`；可读取掷骰物品、来源 GUID、参与玩家投票、need/greed/pass 统计、物品槽位和投票掩码。
 - Guild 兼容补齐：`GetMembers`、`SetLeader`、`SetBankTabText`、`SendPacket`、`SendPacketToRanked`、`Disband`、`AddMember`、`DeleteMember`、`SetMemberRank`、`SetName`、`UpdateMemberData`、`MassInviteToEvent`、`SwapItems`、`SwapItemsWithInventory`、`GetTotalBankMoney`、`GetCreatedDate`、`ResetTimes`、`ModifyBankMoney`。
-- WorldPacket 基础对象封装：`CreatePacket(opcode, size)` 现在返回 `WorldPacket` 对象，支持 opcode / size 查询、opcode 修改、基础整数/浮点/GUID/字符串读写；`Player`、`Group`、`Guild`、`WorldObject` 的 `SendPacket` 入口已经可以发送该对象。
+- WorldPacket 基础对象封装和包事件：`CreatePacket(opcode, size)` 现在返回 `WorldPacket` 对象，支持 opcode / size 查询、opcode 修改、基础整数/浮点/GUID/字符串读写；`Player`、`Group`、`Guild`、`WorldObject` 的 `SendPacket` 入口已经可以发送该对象；`RegisterPacketEvent(opcode, 5/7, function)` 已接入客户端入包和服务端出包拦截。
 - SpellInfo 3.3.5 参考方法名补齐：`HasAreaAuraEffect`、`IsAffectingArea`、`IsTargetingArea`、`NeedsExplicitUnitTarget`、`GetSpellSpecific`、`GetDispelMask`、`CheckTarget`、`CheckExplicitTarget` 等。当前 `SpellInfoMethods.h` 参考方法差异为 `missing=0`，其中部分检查按 Turtle 1.12 能力做兼容近似。
 - SpellEntry 旧接口兼容补齐：`SpellEntryMethods.h` 的 92 个参考方法名已经并入 `SpellInfo` 元表，当前差异扫描为 `ref=92 target=165 missing=0`。本批补上了 `GetSpellName`、`GetDurationIndex`、`GetManaCostPerlevel`、`GetManaPerSecond`、`GetEquippedItemClass`、`GetEffectRealPointsPerLevel`、`GetEffectRadiusIndex`、`GetEffectDamageMultiplier`、`GetEffectBonusMultiplier`、`GetTotemCategory`、`GetAreaGroupId`、`GetRuneCostID` 等兼容入口；WotLK 专属字段按 Turtle 1.12 能力返回 `0` 或全 0 table。
 
@@ -104,6 +104,7 @@ Eluna.ScriptPath = "lua_scripts"
 ```lua
 RegisterPlayerEvent(eventId, function)
 RegisterServerEvent(eventId, function)
+RegisterPacketEvent(opcode, eventId, function[, shots])
 RegisterCreatureEvent(entry, eventId, function)
 RegisterGameObjectEvent(entry, eventId, function)
 RegisterItemEvent(entry, eventId, function)
@@ -113,6 +114,7 @@ RegisterGameObjectGossipEvent(entry, eventId, function)
 RegisterItemGossipEvent(entry, eventId, function)
 ClearPlayerEvents([eventId])
 ClearServerEvents([eventId])
+ClearPacketEvents(opcode, [eventId])
 ClearCreatureEvents(entry, [eventId])
 ClearGameObjectEvents(entry, [eventId])
 ClearItemEvents(entry, [eventId])
@@ -208,8 +210,10 @@ HIGHGUID_MO_TRANSPORT
 
 事件清理函数说明：
 
+- `RegisterPacketEvent` 的第 4 个 `shots` 参数目前先作为兼容参数接收但不扣次数；这点和本适配层现有其他 `Register*Event` 一样，后续可统一补成可取消/限次回调。
 - `ClearPlayerEvents()` 清理所有玩家事件；传入 `eventId` 时只清理指定玩家事件。
 - `ClearServerEvents()` 清理所有服务端事件；传入 `eventId` 时只清理指定服务端事件。
+- `ClearPacketEvents(opcode)` 清理指定 opcode 的所有包事件；传入 `eventId` 时只清理该 opcode 的指定包事件。
 - `ClearCreatureEvents(entry)` 清理该生物模板的所有 Creature 事件；传入 `eventId` 时只清理该模板的指定事件。
 - `ClearGameObjectEvents(entry)`、`ClearItemEvents(entry)` 逻辑相同，分别清理指定物体或物品模板事件。
 - `ClearSpellEvents(spellId)` 清理指定法术 ID 的动态施法事件；传入 `eventId` 时只清理指定事件。
@@ -227,6 +231,15 @@ RegisterServerEvent(15, function(event) end)       -- 服务端关闭
 RegisterServerEvent(16, function(event) end)       -- Lua 状态关闭
 RegisterServerEvent(33, function(event) end)       -- Lua 状态打开
 ```
+
+服务端包事件也已接入，作用于所有 opcode：
+
+```lua
+RegisterServerEvent(5, function(event, packet, player) end) -- 客户端包进入核心处理前
+RegisterServerEvent(7, function(event, packet, player) end) -- 服务端包发送到客户端前
+```
+
+`player` 在角色还未进入世界或会话没有角色对象时为 `nil`。回调返回 `false` 会阻止这个包继续处理或继续发送；收包和发包回调都可以把第二个返回值设为新的 `WorldPacket`，用于替换后续核心看到或真正发出的包。
 
 ### 玩家事件
 
@@ -534,7 +547,7 @@ GameObject 状态事件：
 
 ## WorldPacket 方法
 
-`WorldPacket` 是服务端和客户端之间的底层网络包对象。当前已经完成基础对象封装，可以由 `CreatePacket(opcode, size)` 创建，并通过 `Player`、`Group`、`Guild`、`WorldObject` 的 `SendPacket(packet)` 发送。
+`WorldPacket` 是服务端和客户端之间的底层网络包对象。当前已经完成基础对象封装，可以由 `CreatePacket(opcode, size)` 创建，并通过 `Player`、`Group`、`Guild`、`WorldObject` 的 `SendPacket(packet)` 发送，也可以在包事件里读取和替换核心正在处理的包。
 
 可用方法：
 
@@ -571,7 +584,27 @@ packet:WriteDouble(value)
 - `ReadGUID()` 返回 `ObjectGuid` 对象；`WriteGUID()` 可以接收 `ObjectGuid`、世界对象，或玩家低位 GUID 数字。
 - 读包越界会抛出 Lua 错误 `packet read out of range`，避免 C++ 的 `ByteBufferException` 直接穿出。
 - 这是底层包接口，脚本必须按 1.12 客户端 opcode 的字段顺序写入；opcode 或字段写错可能导致客户端断开、界面异常或客户端崩溃。
-- 当前已支持 Lua 主动创建并发送包；客户端入包事件拦截和把现有收包包装成 Lua `WorldPacket` 的流程还没有移植。
+- 包事件里拿到的是当前包的副本。只读取它不会改变核心原始包；如果要修改核心继续处理或真正发出的内容，需要 `return true, newPacket` 或 `return nil, newPacket` 把新的 `WorldPacket` 作为第二个返回值传回。
+- 包事件返回 `false` 会拦截这个包。收包事件中表示核心不再执行对应 opcode handler；发包事件中表示不发送给客户端。
+
+### 包事件
+
+```lua
+-- 5 = PACKET_EVENT_ON_PACKET_RECEIVE
+-- 7 = PACKET_EVENT_ON_PACKET_SEND
+RegisterPacketEvent(opcode, 5, function(event, packet, player)
+    -- 返回 false 可以拦截客户端入包
+end)
+
+RegisterPacketEvent(opcode, 7, function(event, packet, player)
+    -- 返回 false 可以阻止这个服务端包发给客户端
+end)
+
+ClearPacketEvents(opcode)
+ClearPacketEvents(opcode, 5)
+```
+
+也可以用 `RegisterServerEvent(5, ...)` 和 `RegisterServerEvent(7, ...)` 监听所有 opcode。`6` 是 3.3.5 Eluna 里的未知包事件枚举，当前 Turtle 这份核心的未知 opcode 会在队列阶段被跳过，所以没有单独触发。
 
 ## ObjectGuid 方法
 
@@ -2226,7 +2259,7 @@ end
 
 仍待继续补齐：
 
-- `WorldPacket` 基础对象封装已完成，客户端入包事件拦截、现有收包包装成 Lua 对象等流程仍待补齐。
+- `WorldPacket` 基础对象封装、客户端入包事件和服务端出包事件已接入；未知包事件 `6` 暂不触发，因为 Turtle 队列阶段会直接跳过无处理 opcode。
 - `ObjectGuid` 已有值对象封装，并已支持 `Map` 按 GUID 反查 Player / Creature / GameObject / Corpse / Unit / WorldObject，以及 `Player` 按 GUID 反查自己背包或银行里的物品。Creature / GameObject / Corpse 不做全局离线查找，需要地图上下文。
 - `Creature`、`Player`、`Corpse`、`SpellInfo`、`Group`、`Guild`、`Map`、动态 `Spell`、通用 `Object` 和通用 `WorldObject` 的 3.3.5 参考方法名已补齐，不过部分接口按 Turtle 1.12 能力做兼容返回。
 - `ItemTemplate` 的 3.3.5 参考方法名已补齐，其中 `GetIcon()` 因 Turtle 1.12 当前未加载图标路径字段而兼容返回空字符串。

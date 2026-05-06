@@ -169,6 +169,13 @@ char const* WorldSession::GetPlayerName() const
 /// Send a packet to the client
 void WorldSession::SendPacket(WorldPacket const* packet)
 {
+#ifdef USE_LUA
+    WorldPacket luaPacket(*packet);
+    if (!sTurtleLuaEngine.OnPacketSend(this, luaPacket))
+        return;
+    packet = &luaPacket;
+#endif
+
     // There is a maximum size packet.
     if (packet->size() > 0x8000)
     {
@@ -447,6 +454,17 @@ void WorldSession::ProcessPackets(PacketFilter& updater)
             continue;
         }
 
+#ifdef USE_LUA
+        if (!sTurtleLuaEngine.OnPacketReceive(this, *packet))
+        {
+            delete packet;
+
+            if (totalPackets > MaxPacketsPerUpdate)
+                break;
+
+            continue;
+        }
+#endif
 
         ALL_SESSION_SCRIPTS(this, OnPacket(packet->GetOpcode()));
         OpcodeHandler const& opHandle = opcodeTable[packet->GetOpcode()];

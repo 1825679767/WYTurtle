@@ -25,6 +25,7 @@ class Spell;
 class Roll;
 class InstanceData;
 class WorldPacket;
+class WorldSession;
 class SpellCastTargets;
 class ObjectGuid;
 struct ItemPrototype;
@@ -93,11 +94,21 @@ enum TurtleLuaPlayerEvents
 
 enum TurtleLuaServerEvents
 {
+    SERVER_EVENT_ON_PACKET_RECEIVE = 5,
+    SERVER_EVENT_ON_PACKET_RECEIVE_UNKNOWN = 6,
+    SERVER_EVENT_ON_PACKET_SEND = 7,
     WORLD_EVENT_ON_UPDATE = 13,
     WORLD_EVENT_ON_STARTUP = 14,
     WORLD_EVENT_ON_SHUTDOWN = 15,
     ELUNA_EVENT_ON_LUA_STATE_CLOSE = 16,
     ELUNA_EVENT_ON_LUA_STATE_OPEN = 33,
+};
+
+enum TurtleLuaPacketEvents
+{
+    PACKET_EVENT_ON_PACKET_RECEIVE = 5,
+    PACKET_EVENT_ON_PACKET_RECEIVE_UNKNOWN = 6,
+    PACKET_EVENT_ON_PACKET_SEND = 7,
 };
 
 enum TurtleLuaCreatureEvents
@@ -217,6 +228,8 @@ public:
     void OnPlayerStoreNewItem(Player* player, Item* item, uint32 count);
     void OnPlayerCompleteQuest(Player* player, Quest const* quest);
     void OnPlayerGroupRollRewardItem(Player* player, Item* item, uint32 count, uint32 voteType, Roll const* roll);
+    bool OnPacketReceive(WorldSession* session, WorldPacket& packet);
+    bool OnPacketSend(WorldSession* session, WorldPacket& packet);
     void OnPlayerBGDesertion(Player* player, uint32 type);
     bool OnPlayerChat(Player* player, uint32 type, uint32 lang, std::string& message);
     bool OnPlayerWhisper(Player* player, uint32 type, uint32 lang, std::string& message, Player* receiver);
@@ -264,6 +277,7 @@ public:
     void RegisterGameObjectEvent(uint32 entry, uint32 eventId, int functionRef);
     void RegisterItemEvent(uint32 entry, uint32 eventId, int functionRef);
     void RegisterSpellEvent(uint32 entry, uint32 eventId, int functionRef);
+    void RegisterPacketEvent(uint32 opcode, uint32 eventId, int functionRef);
     void RegisterCreatureGossipEvent(uint32 entry, uint32 eventId, int functionRef);
     void RegisterGameObjectGossipEvent(uint32 entry, uint32 eventId, int functionRef);
     void RegisterItemGossipEvent(uint32 entry, uint32 eventId, int functionRef);
@@ -273,6 +287,7 @@ public:
     void ClearGameObjectEvents(uint32 entry, uint32 eventId, bool allEvents);
     void ClearItemEvents(uint32 entry, uint32 eventId, bool allEvents);
     void ClearSpellEvents(uint32 entry, uint32 eventId, bool allEvents);
+    void ClearPacketEvents(uint32 opcode, uint32 eventId, bool allEvents);
     void ClearCreatureGossipEvents(uint32 entry, uint32 eventId, bool allEvents);
     void ClearGameObjectGossipEvents(uint32 entry, uint32 eventId, bool allEvents);
     void ClearItemGossipEvents(uint32 entry, uint32 eventId, bool allEvents);
@@ -373,6 +388,9 @@ private:
     bool CallPlayerEvent(uint32 eventId, Player* player);
     bool CallPlayerChatEvent(uint32 eventId, char const* context, Player* player, uint32 type, uint32 lang, std::string& message, Player* receiver, Group* group, Guild* guild, char const* channelName);
     void CallPlayerItemEvent(uint32 eventId, char const* context, Player* player, Item* item, uint32 count);
+    bool CallServerPacketEvent(uint32 eventId, WorldPacket& packet, Player* player, char const* context);
+    bool CallPacketEvent(uint32 opcode, uint32 eventId, WorldPacket& packet, Player* player, char const* context);
+    bool CallPacketFunctionRefs(std::vector<int> const& functionRefs, uint32 eventId, WorldPacket& packet, Player* player, char const* context);
     void CallServerEvent(uint32 eventId);
     void CallServerEvent(uint32 eventId, uint32 arg);
     bool CallEntryEvent(std::map<uint32, std::map<uint32, std::vector<int>>>& store, uint32 entry, uint32 eventId, int argCount);
@@ -392,6 +410,7 @@ private:
     std::map<uint32, std::map<uint32, std::vector<int>>> _gameObjectEvents;
     std::map<uint32, std::map<uint32, std::vector<int>>> _itemEvents;
     std::map<uint32, std::map<uint32, std::vector<int>>> _spellEvents;
+    std::map<uint32, std::map<uint32, std::vector<int>>> _packetEvents;
     std::map<uint32, std::map<uint32, std::vector<int>>> _creatureGossipEvents;
     std::map<uint32, std::map<uint32, std::vector<int>>> _gameObjectGossipEvents;
     std::map<uint32, std::map<uint32, std::vector<int>>> _itemGossipEvents;
