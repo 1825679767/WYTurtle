@@ -76,7 +76,7 @@ jobs:
         with:
           path: |
             ${{ env.VCPKG_ROOT }}
-          key: wyturtle-vcpkg-windows-x64-ace-openssl-${{ hashFiles('.github/workflows/windows-release.yml') }}
+          key: wyturtle-vcpkg-windows-x64-ace-openssl-${{ hashFiles('.github/workflows/windows-release.yml', 'vcpkg.json') }}
           restore-keys: |
             wyturtle-vcpkg-windows-x64-ace-openssl-
 
@@ -88,16 +88,26 @@ jobs:
               "VCPKG_ROOT=$env:VCPKG_ROOT" >> $env:GITHUB_ENV
           }
 
-          if (-not (Test-Path -LiteralPath "$env:VCPKG_ROOT\vcpkg.exe")) {
+          $vcpkgExe = Join-Path $env:VCPKG_ROOT "vcpkg.exe"
+          $vcpkgRootMarker = Join-Path $env:VCPKG_ROOT ".vcpkg-root"
+          if ((Test-Path -LiteralPath $vcpkgExe) -and -not (Test-Path -LiteralPath $vcpkgRootMarker)) {
+              Remove-Item -LiteralPath $env:VCPKG_ROOT -Recurse -Force
+          }
+
+          if (-not (Test-Path -LiteralPath $vcpkgExe)) {
               git clone --depth 1 https://github.com/microsoft/vcpkg "$env:VCPKG_ROOT"
               & "$env:VCPKG_ROOT\bootstrap-vcpkg.bat" -disableMetrics
           }
-          & "$env:VCPKG_ROOT\vcpkg.exe" version
+          & $vcpkgExe version
 
       - name: Install ACE and OpenSSL
         shell: pwsh
         run: |
-          & "$env:VCPKG_ROOT\vcpkg.exe" install ace:x64-windows openssl:x64-windows --clean-after-build
+          & "$env:VCPKG_ROOT\vcpkg.exe" install `
+            --triplet x64-windows `
+            --x-manifest-root="$env:GITHUB_WORKSPACE" `
+            --x-install-root="$env:VCPKG_ROOT\installed" `
+            --clean-after-build
 
       - name: Prepare Windows dependencies
         shell: pwsh
