@@ -867,6 +867,9 @@ void World::LoadConfigSettings(bool reload)
     }
 
     LoadConfigSettingsCommonPart(reload);
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnConfigLoad(reload);
+#endif
 }
 
 bool World::LoadConfigSettingsFromDB(bool reload)
@@ -3232,6 +3235,9 @@ void World::ShutdownServ(uint32 time, uint32 options, uint8 exitcode)
 
     m_ShutdownMask = options;
     m_ExitCode = exitcode;
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnShutdownInit(exitcode, options);
+#endif
 
     ///- If the shutdown time is 0, set m_stopEvent (except if shutdown is 'idle' with remaining sessions)
     if (time == 0)
@@ -3292,6 +3298,9 @@ void World::ShutdownCancel()
     m_ShutdownTimer = 0;
     m_ExitCode = SHUTDOWN_EXIT_CODE;                       // to default value
     SendServerMessage(msgid);
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnShutdownCancel();
+#endif
 
     DEBUG_LOG("Server %s cancelled.", (m_ShutdownMask & SHUTDOWN_MASK_RESTART ? "restart" : "shutdown"));
 }

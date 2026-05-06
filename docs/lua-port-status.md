@@ -81,6 +81,7 @@ E:\TurtleBY
 - 全局兼容函数补齐：新增核心信息、Lua 状态信息、bit 位运算、毫秒时间、背包位置判断、日志打印、全局命令执行和全局定时事件清理入口。`GetCoreExpansion()` 按 Turtle 1.12 返回 `0`，`GetStateMap()` / `GetStateMapId()` / `GetStateInstanceId()` 按当前单 Lua 状态返回 `nil` / `-1` / `0`，`IsCompatibilityMode()` 返回 `true`。
 - 全局工具/管理函数补充：新增 `CreateLongLong`、`CreateULongLong`、`CreateInt64`、`CreateUint64`、`GetItemLink`、`GetAreaName`、`GetGuildByLeaderGUID`、`Kick`、`Ban`、`SaveAllPlayers`、`SendMail`、`AddVendorItem`、`VendorRemoveItem`、`VendorRemoveAllItems`。其中 `Ban()` 调用 Turtle 当前异步封禁流程，合法请求会先返回 `3` 表示已进入处理队列；`AddVendorItem` 的第 5 个参数在 Turtle 1.12 中按 `itemflags` 使用，不是 3.3.5 的 extended cost。
 - 全局游戏事件/地图/Gossip 函数补充：新增 `GetActiveGameEvents`、`IsGameEventActive`、`StartGameEvent`、`StopGameEvent`、`GetMapEntrance`、`GetGossipMenuOptionLocale`，均接入 Turtle 当前 `GameEventMgr` / `ObjectMgr` 真实接口。
+- Server 生命周期事件补充：`RegisterServerEvent(9, ...)` 已接入配置加载/重载，参数为 `(event, reload)`；`11` 已接入关服初始化，参数为 `(event, exitCode, shutdownMask)`；`12` 已接入关服取消；`34` / `35` 已接入 `GameEventMgr` 的游戏事件开始/结束，参数为 `(event, gameEventId)`。启动阶段 Lua 引擎尚未初始化前发生的配置读取或游戏事件恢复不会补发。
 - 全局版本兼容占位：新增 `GetOwnerHalaa` / `SetOwnerHalaa`，Turtle 1.12 没有 TBC/WotLK 的纳格兰 Halaa 系统，因此当前只保持脚本兼容，不改变游戏状态。
 - 全局动态出生函数补充：新增 `PerformIngameSpawn`，支持临时/保存的生物和游戏物体出生；临时出生走地图召唤接口，保存出生走 Turtle 现有静态 GUID、保存到 DB、加入网格的路径。
 - 全局 DBC 查询函数补充：新增 `LookupEntry`，当前支持 `Spell` / `SpellEntry` 查询并返回 `SpellInfo` 对象；`GemProperties` 在 Turtle 1.12 中没有对应 DBC，当前返回兼容对象，`GetId()` 返回查询 ID，`GetSpellItemEnchantement()` 固定为 `0`。
@@ -2668,7 +2669,7 @@ end
 
 - 脚本加载、重载和关闭事件。
 - 玩家创建、删除、登录、登出、施法、击杀、被 Creature 击杀、决斗、经验/金币/声望变化、天赋变化、等级变化、聊天、命令、文字表情、保存、副本绑定、Zone/Area/地图变化、队伍掷骰获物、战场逃亡事件。
-- 服务端启动、关闭、Update 事件。
+- 服务端启动、关闭、Update、配置加载/重载、关服初始化/取消、游戏事件开始/结束事件。
 - 地图创建、销毁、玩家进入/离开、地图 Update 事件，以及按 mapId / instanceId 绑定的副本生命周期事件。
 - 战场创建、开始、结束、销毁前事件和 `BattleGround` 基础对象。
 - 工单创建、玩家更新文本、关闭事件和 `Ticket` 基础对象。
@@ -2704,7 +2705,7 @@ end
 - `Creature`、`Player`、`Corpse`、`DynamicObject`、`SpellInfo`、`SpellCastTargets`、`GemPropertiesEntry`、`Vehicle`、`Group`、`Guild`、`Map`、`BattleGround`、`Ticket`、动态 `Spell`、通用 `Object`、通用 `WorldObject` 和通用 `Unit` 的 3.3.5 参考方法名已补齐或基础接入，不过部分接口按 Turtle 1.12 能力做兼容返回。
 - `ItemTemplate` 的 3.3.5 参考方法名已补齐，其中 `GetIcon()` 已接入 `ItemDisplayInfo.dbc` 图标字段；找不到显示信息时才返回空字符串。
 - 3.3.5 专属成就、真实雕文效果、铭文/完整双天赋主动槽位、LFG 和部分邮件/拍卖/银行/训练师细节目前仍是兼容返回或空入口，后续需要按 Turtle 1.12 的真实系统单独补强；竞技场点数和雕文槽位当前只是脚本可见的持久化数值。
-- 3.3.5 玩家事件里 `45` 成就完成和 `50` LFG 入队检查没有 Turtle 1.12 等价系统，当前不接入。
+- 3.3.5 玩家事件里 `45` 成就完成已按脚本可见的兼容成就状态触发；`50` LFG 入队检查没有 Turtle 1.12 等价系统，当前不接入。
 - 真实载具系统在 Turtle 1.12 中不存在，当前 `IsOnVehicle` / `GetVehicle` / `GetVehicleKit` 仍为空入口；Vehicle 元表方法也只是兼容返回。
 - 3.3.5 参考模块的全局公开函数当前已对齐；`RegisterEntryHelper`、`RegisterEventHelper`、`RegisterUniqueHelper`、`DBQueryAsync` 是 Eluna C++ 内部 helper，不是需要暴露给 Lua 脚本的公开 API。`WorldDBQueryAsync`、`CharDBQueryAsync` / `CharacterDBQueryAsync`、`AuthDBQueryAsync` / `LoginDBQueryAsync`、`HttpRequest` 已接入，callback 会回到 Lua 世界线程执行。
 

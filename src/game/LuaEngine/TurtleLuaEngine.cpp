@@ -17646,6 +17646,56 @@ void TurtleLuaEngine::Update(uint32 diff)
     CallServerEvent(WORLD_EVENT_ON_UPDATE, diff);
 }
 
+void TurtleLuaEngine::OnConfigLoad(bool reload)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled())
+        return;
+
+    CallServerEvent(WORLD_EVENT_ON_CONFIG_LOAD, reload ? 1 : 0);
+}
+
+void TurtleLuaEngine::OnShutdownInit(uint32 exitCode, uint32 shutdownMask)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled())
+        return;
+
+    CallServerEvent(WORLD_EVENT_ON_SHUTDOWN_INIT, exitCode, shutdownMask);
+}
+
+void TurtleLuaEngine::OnShutdownCancel()
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled())
+        return;
+
+    CallServerEvent(WORLD_EVENT_ON_SHUTDOWN_CANCEL);
+}
+
+void TurtleLuaEngine::OnGameEventStart(uint32 gameEventId)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled())
+        return;
+
+    CallServerEvent(GAME_EVENT_START, gameEventId);
+}
+
+void TurtleLuaEngine::OnGameEventStop(uint32 gameEventId)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled())
+        return;
+
+    CallServerEvent(GAME_EVENT_STOP, gameEventId);
+}
+
 void TurtleLuaEngine::EnqueueAsyncQueryResult(uint64 stateId, int functionRef, QueryNamedResult* rawResult)
 {
     std::unique_ptr<QueryNamedResult> result(rawResult);
@@ -21180,6 +21230,34 @@ void TurtleLuaEngine::CallServerEvent(uint32 eventId, uint32 arg)
         lua_pushinteger(_state, arg);
 
         if (lua_pcall(_state, 2, 0, 0) != LUA_OK)
+        {
+            LogError("server event");
+            lua_pop(_state, 1);
+        }
+    }
+}
+
+void TurtleLuaEngine::CallServerEvent(uint32 eventId, uint32 arg1, uint32 arg2)
+{
+    auto itr = _serverEvents.find(eventId);
+    if (itr == _serverEvents.end())
+        return;
+
+    std::vector<int> functionRefs = itr->second;
+    for (int functionRef : functionRefs)
+    {
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        lua_pushinteger(_state, eventId);
+        lua_pushinteger(_state, arg1);
+        lua_pushinteger(_state, arg2);
+
+        if (lua_pcall(_state, 3, 0, 0) != LUA_OK)
         {
             LogError("server event");
             lua_pop(_state, 1);

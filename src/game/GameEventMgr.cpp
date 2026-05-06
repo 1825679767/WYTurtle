@@ -32,6 +32,9 @@
 #include "BattleGroundMgr.h"
 #include "MassMailMgr.h"
 #include "SpellMgr.h"
+#ifdef USE_LUA
+#include "TurtleLuaEngine.h"
+#endif
 #include "Policies/SingletonImp.h"
 
 GameEventMgr sGameEventMgr;
@@ -77,6 +80,9 @@ void GameEventMgr::StartEvent(uint16 event_id, bool overwrite /*=false*/, bool r
         return;
     }
     ApplyNewEvent(event_id, resume);
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnGameEventStart(event_id);
+#endif
     
     //invoke enable on hardcoded events
     if (mGameEvent[event_id].hardcoded && !mGameEvent[event_id].disabled)
@@ -104,6 +110,9 @@ void GameEventMgr::StopEvent(uint16 event_id, bool overwrite)
         return;
     }
     UnApplyEvent(event_id);
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnGameEventStop(event_id);
+#endif
     if (overwrite)
     {
         mGameEvent[event_id].start = time(nullptr) - mGameEvent[event_id].length * MINUTE;

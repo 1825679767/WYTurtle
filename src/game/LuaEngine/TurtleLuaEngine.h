@@ -104,6 +104,9 @@ enum TurtleLuaServerEvents
     SERVER_EVENT_ON_PACKET_RECEIVE = 5,
     SERVER_EVENT_ON_PACKET_RECEIVE_UNKNOWN = 6,
     SERVER_EVENT_ON_PACKET_SEND = 7,
+    WORLD_EVENT_ON_CONFIG_LOAD = 9,
+    WORLD_EVENT_ON_SHUTDOWN_INIT = 11,
+    WORLD_EVENT_ON_SHUTDOWN_CANCEL = 12,
     WORLD_EVENT_ON_UPDATE = 13,
     WORLD_EVENT_ON_STARTUP = 14,
     WORLD_EVENT_ON_SHUTDOWN = 15,
@@ -117,6 +120,8 @@ enum TurtleLuaServerEvents
     MAP_EVENT_ON_UPDATE = 23,
     ADDON_EVENT_ON_MESSAGE = 30,
     ELUNA_EVENT_ON_LUA_STATE_OPEN = 33,
+    GAME_EVENT_START = 34,
+    GAME_EVENT_STOP = 35,
 };
 
 enum TurtleLuaPacketEvents
@@ -249,6 +254,11 @@ public:
     void Shutdown();
     void Reload();
     void Update(uint32 diff);
+    void OnConfigLoad(bool reload);
+    void OnShutdownInit(uint32 exitCode, uint32 shutdownMask);
+    void OnShutdownCancel();
+    void OnGameEventStart(uint32 gameEventId);
+    void OnGameEventStop(uint32 gameEventId);
 
     void OnPlayerLogin(Player* player);
     void OnPlayerLogout(Player* player);
@@ -549,6 +559,7 @@ private:
     bool CallPacketFunctionRefs(std::vector<int> const& functionRefs, uint32 eventId, WorldPacket& packet, Player* player, char const* context);
     void CallServerEvent(uint32 eventId);
     void CallServerEvent(uint32 eventId, uint32 arg);
+    void CallServerEvent(uint32 eventId, uint32 arg1, uint32 arg2);
     void CallServerMapEvent(uint32 eventId, Map* map, Player* player, uint32 diff);
     void CallBattleGroundEvent(uint32 eventId, BattleGround* bg, int argCount);
     void CallTicketEvent(uint32 eventId, GmTicket* ticket, int argCount);
