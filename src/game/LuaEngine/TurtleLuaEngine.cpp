@@ -176,6 +176,47 @@ uint32 CountCurrentTalentSpells(Player* player)
     return count;
 }
 
+uint32 GetPrimaryTalentTree(Player* player)
+{
+    if (!player)
+        return 3;
+
+    uint32 points[3] = {0, 0, 0};
+    uint32 numRows = sTalentStore.GetNumRows();
+    for (uint32 talentId = 0; talentId < numRows; ++talentId)
+    {
+        TalentEntry const* talent = sTalentStore.LookupEntry(talentId);
+        if (!talent)
+            continue;
+
+        TalentTabEntry const* talentTab = sTalentTabStore.LookupEntry(talent->TalentTab);
+        if (!talentTab || talentTab->tabpage >= 3 || (player->GetClassMask() & talentTab->ClassMask) == 0)
+            continue;
+
+        for (int32 rank = MAX_TALENT_RANK - 1; rank >= 0; --rank)
+        {
+            if (talent->RankID[rank] && player->HasSpell(talent->RankID[rank]))
+            {
+                points[talentTab->tabpage] += rank + 1;
+                break;
+            }
+        }
+    }
+
+    uint32 bestTree = 3;
+    uint32 bestPoints = 0;
+    for (uint32 tree = 0; tree < 3; ++tree)
+    {
+        if (points[tree] > bestPoints)
+        {
+            bestTree = tree;
+            bestPoints = points[tree];
+        }
+    }
+
+    return bestTree;
+}
+
 uint32 ToElunaChatType(uint32 type)
 {
     switch (ChatMsg(type))
@@ -5891,6 +5932,96 @@ int PlayerGetActiveSpec(lua_State* state)
     }
 
     lua_pushinteger(state, 0);
+    return 1;
+}
+
+int PlayerHasTankSpec(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    uint32 tree = GetPrimaryTalentTree(player);
+    bool result = false;
+
+    if (player)
+    {
+        switch (player->GetClass())
+        {
+            case CLASS_WARRIOR: result = tree == 2; break;
+            case CLASS_PALADIN: result = tree == 1; break;
+            case CLASS_DRUID: result = tree == 1; break;
+            default: break;
+        }
+    }
+
+    lua_pushboolean(state, result);
+    return 1;
+}
+
+int PlayerHasHealSpec(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    uint32 tree = GetPrimaryTalentTree(player);
+    bool result = false;
+
+    if (player)
+    {
+        switch (player->GetClass())
+        {
+            case CLASS_PALADIN: result = tree == 0; break;
+            case CLASS_PRIEST: result = tree == 0 || tree == 1; break;
+            case CLASS_SHAMAN: result = tree == 2; break;
+            case CLASS_DRUID: result = tree == 2; break;
+            default: break;
+        }
+    }
+
+    lua_pushboolean(state, result);
+    return 1;
+}
+
+int PlayerHasCasterSpec(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    uint32 tree = GetPrimaryTalentTree(player);
+    bool result = false;
+
+    if (player)
+    {
+        switch (player->GetClass())
+        {
+            case CLASS_PRIEST: result = tree == 2; break;
+            case CLASS_SHAMAN: result = tree == 0; break;
+            case CLASS_MAGE: result = tree < 3; break;
+            case CLASS_WARLOCK: result = tree < 3; break;
+            case CLASS_DRUID: result = tree == 0; break;
+            default: break;
+        }
+    }
+
+    lua_pushboolean(state, result);
+    return 1;
+}
+
+int PlayerHasMeleeSpec(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    uint32 tree = GetPrimaryTalentTree(player);
+    bool result = false;
+
+    if (player)
+    {
+        switch (player->GetClass())
+        {
+            case CLASS_WARRIOR: result = tree == 0 || tree == 1; break;
+            case CLASS_PALADIN: result = tree == 2; break;
+            case CLASS_HUNTER: result = tree < 3; break;
+            case CLASS_ROGUE: result = tree < 3; break;
+            case CLASS_SHAMAN: result = tree == 1; break;
+            case CLASS_DRUID: result = tree == 1; break;
+            default: break;
+        }
+    }
+
+    lua_pushboolean(state, result);
     return 1;
 }
 
@@ -18051,13 +18182,13 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "GroupCreate", &PlayerGroupCreate);
     SetMethod(_state, "GroupInvite", &PlayerGroupInvite);
     SetMethod(_state, "HasAchieved", &PlayerCompatReturnFalse);
-    SetMethod(_state, "HasCasterSpec", &PlayerCompatReturnFalse);
-    SetMethod(_state, "HasHealSpec", &PlayerCompatReturnFalse);
+    SetMethod(_state, "HasCasterSpec", &PlayerHasCasterSpec);
+    SetMethod(_state, "HasHealSpec", &PlayerHasHealSpec);
     SetMethod(_state, "HasPendingBind", &PlayerCompatReturnFalse);
-    SetMethod(_state, "HasMeleeSpec", &PlayerCompatReturnFalse);
+    SetMethod(_state, "HasMeleeSpec", &PlayerHasMeleeSpec);
     SetMethod(_state, "HasReceivedQuestReward", &PlayerGetQuestRewardStatus);
     SetMethod(_state, "HasTalent", &PlayerHasTalent);
-    SetMethod(_state, "HasTankSpec", &PlayerCompatReturnFalse);
+    SetMethod(_state, "HasTankSpec", &PlayerHasTankSpec);
     SetMethod(_state, "HasTitle", &PlayerHasTitle);
     SetMethod(_state, "InRandomLfgDungeon", &PlayerCompatReturnFalse);
     SetMethod(_state, "IsARecruiter", &PlayerCompatReturnFalse);
