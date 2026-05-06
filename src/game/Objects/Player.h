@@ -1721,6 +1721,7 @@ class Player final: public Unit
         void SendTalentWipeConfirm(ObjectGuid guid) const;
     public:
         uint32 GetFreeTalentPoints() const { return GetUInt32Value(PLAYER_CHARACTER_POINTS1); }
+        uint32 GetTalentResetCost() const { return GetResetTalentsCost(); }
         void SetFreeTalentPoints(uint32 points);
         bool ResetTalents(bool no_cost = false);
         void InitTalentForLevel();

@@ -3174,7 +3174,9 @@ int PlayerGetHealthBonusFromStamina(lua_State* state)
 {
     Player* player = CheckPlayer(state, 1);
     float stamina = player ? player->GetStat(STAT_STAMINA) : 0.0f;
-    lua_pushnumber(state, Player::GetHealthBonusFromStamina(stamina));
+    float baseStam = std::min(stamina, 20.0f);
+    float moreStam = stamina - baseStam;
+    lua_pushnumber(state, baseStam + (moreStam * 10.0f));
     return 1;
 }
 
@@ -3235,7 +3237,9 @@ int PlayerGetManaBonusFromIntellect(lua_State* state)
 {
     Player* player = CheckPlayer(state, 1);
     float intellect = player ? player->GetStat(STAT_INTELLECT) : 0.0f;
-    lua_pushnumber(state, Player::GetManaBonusFromIntellect(intellect));
+    float baseInt = std::min(intellect, 20.0f);
+    float moreInt = intellect - baseInt;
+    lua_pushnumber(state, baseInt + (moreInt * 15.0f));
     return 1;
 }
 
@@ -3491,7 +3495,7 @@ int PlayerRemoveFromGroup(lua_State* state)
 int PlayerResetTalentsCost(lua_State* state)
 {
     Player* player = CheckPlayer(state, 1);
-    lua_pushinteger(state, player ? player->GetResetTalentsCost() : 0);
+    lua_pushinteger(state, player ? player->GetTalentResetCost() : 0);
     return 1;
 }
 
@@ -7552,7 +7556,10 @@ int CreatureIsTargetableForAttack(lua_State* state)
 {
     Creature* creature = CheckCreature(state, 1);
     bool mustBeDead = lua_toboolean(state, 2) != 0;
-    lua_pushboolean(state, creature && creature->IsTargetableForAttack(mustBeDead, false));
+    bool targetable = creature && creature->IsTargetable(true, false, false, false);
+    if (targetable)
+        targetable = mustBeDead ? !creature->IsAlive() : creature->IsAlive();
+    lua_pushboolean(state, targetable);
     return 1;
 }
 
