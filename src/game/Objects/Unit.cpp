@@ -1437,13 +1437,27 @@ void Unit::Kill(Unit* pVictim, SpellEntry const *spellProto, bool durabilityLoss
         if (TemporarySummon* pSummon = pCreatureVictim->IsTemporarySummon() ? static_cast<TemporarySummon*>(pCreatureVictim) : nullptr)
         {
             if (pSummon->GetSummonerGuid().IsCreature())
+            {
                 if (Creature* pSummoner = pCreatureVictim->GetMap()->GetCreature(pSummon->GetSummonerGuid()))
-                    if (pSummoner->AI())
+                {
+#ifdef USE_LUA
+                    bool skipSummonerAI = sTurtleLuaEngine.OnCreatureSummonedCreatureDied(pSummoner, pCreatureVictim, this);
+#else
+                    bool skipSummonerAI = false;
+#endif
+                    if (!skipSummonerAI && pSummoner->AI())
                         pSummoner->AI()->SummonedCreatureJustDied(pCreatureVictim);
+                }
+            }
         }
         else if (Creature* pOwnerCreature = ::ToCreature(pVictim->GetCharmerOrOwner()))
         {
-            if (pOwnerCreature->AI())
+#ifdef USE_LUA
+            bool skipOwnerAI = sTurtleLuaEngine.OnCreatureSummonedCreatureDied(pOwnerCreature, pCreatureVictim, this);
+#else
+            bool skipOwnerAI = false;
+#endif
+            if (!skipOwnerAI && pOwnerCreature->AI())
                 pOwnerCreature->AI()->SummonedCreatureJustDied(pCreatureVictim);
         }
 
@@ -5034,6 +5048,12 @@ bool Unit::Attack(Unit* victim, bool meleeAttack)
         if (((Creature*)victim)->IsInEvadeMode())
             return false;
     }
+
+#ifdef USE_LUA
+    if (Creature* creature = ToCreature())
+        if (sTurtleLuaEngine.OnCreaturePreCombat(creature, victim))
+            return false;
+#endif
 
     // remove SPELL_AURA_MOD_UNATTACKABLE at attack (in case non-interruptible spells stun aura applied also that not let attack)
     if (HasAuraType(SPELL_AURA_MOD_UNATTACKABLE))

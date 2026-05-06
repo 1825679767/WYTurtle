@@ -188,12 +188,15 @@ enum TurtleLuaCreatureEvents
     CREATURE_EVENT_ON_REACH_WP = 6,
     CREATURE_EVENT_ON_RECEIVE_EMOTE = 8,
     CREATURE_EVENT_ON_DAMAGE_TAKEN = 9,
+    CREATURE_EVENT_ON_PRE_COMBAT = 10,
     CREATURE_EVENT_ON_OWNER_ATTACKED = 12,
     CREATURE_EVENT_ON_OWNER_ATTACKED_AT = 13,
     CREATURE_EVENT_ON_HIT_BY_SPELL = 14,
     CREATURE_EVENT_ON_SPELL_HIT_TARGET = 15,
     CREATURE_EVENT_ON_JUST_SUMMONED_CREATURE = 19,
     CREATURE_EVENT_ON_SUMMONED_CREATURE_DESPAWN = 20,
+    CREATURE_EVENT_ON_SUMMONED_CREATURE_DIED = 21,
+    CREATURE_EVENT_ON_SUMMONED = 22,
     CREATURE_EVENT_ON_RESET = 23,
     CREATURE_EVENT_ON_REACH_HOME = 24,
     CREATURE_EVENT_ON_CORPSE_REMOVED = 26,
@@ -351,12 +354,15 @@ public:
     bool OnCreatureReachHome(Creature* creature);
     void OnCreatureAIUpdate(Creature* creature, uint32 diff);
     bool OnCreatureDamageTaken(Creature* creature, Unit* attacker, uint32& damage);
+    bool OnCreaturePreCombat(Creature* creature, Unit* target);
     bool OnCreatureOwnerAttacked(Creature* creature, Unit* target);
     bool OnCreatureOwnerAttackedAt(Creature* creature, Unit* attacker);
     bool OnCreatureHitBySpell(Creature* creature, WorldObject* caster, uint32 spellId);
     bool OnCreatureSpellHitTarget(Creature* creature, Unit* target, uint32 spellId);
     bool OnCreatureJustSummoned(Creature* creature, Creature* summon);
     bool OnCreatureSummonedCreatureDespawn(Creature* creature, Creature* summon);
+    bool OnCreatureSummonedCreatureDied(Creature* creature, Creature* summon, Unit* killer);
+    bool OnCreatureSummoned(Creature* creature, Unit* summoner);
     bool OnCreatureMoveInLOS(Creature* creature, Unit* who);
     bool OnCreatureReceiveEmote(Creature* creature, Player* player, uint32 emoteId);
     bool OnCreatureCorpseRemoved(Creature* creature, uint32& respawnDelay);

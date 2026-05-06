@@ -24299,6 +24299,19 @@ bool TurtleLuaEngine::OnCreatureDamageTaken(Creature* creature, Unit* attacker, 
     return stopNormalAction;
 }
 
+bool TurtleLuaEngine::OnCreaturePreCombat(Creature* creature, Unit* target)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled() || !creature || !target)
+        return false;
+
+    lua_pushinteger(_state, CREATURE_EVENT_ON_PRE_COMBAT);
+    PushCreature(creature);
+    PushUnit(target);
+    return CallCreatureEvent(creature, CREATURE_EVENT_ON_PRE_COMBAT, 3);
+}
+
 bool TurtleLuaEngine::OnCreatureOwnerAttacked(Creature* creature, Unit* target)
 {
     std::lock_guard<std::recursive_mutex> guard(_lock);
@@ -24415,6 +24428,33 @@ bool TurtleLuaEngine::OnCreatureSummonedCreatureDespawn(Creature* creature, Crea
     PushCreature(creature);
     PushCreature(summon);
     return CallCreatureEvent(creature, CREATURE_EVENT_ON_SUMMONED_CREATURE_DESPAWN, 3);
+}
+
+bool TurtleLuaEngine::OnCreatureSummonedCreatureDied(Creature* creature, Creature* summon, Unit* killer)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled() || !creature || !summon)
+        return false;
+
+    lua_pushinteger(_state, CREATURE_EVENT_ON_SUMMONED_CREATURE_DIED);
+    PushCreature(creature);
+    PushCreature(summon);
+    PushUnit(killer);
+    return CallCreatureEvent(creature, CREATURE_EVENT_ON_SUMMONED_CREATURE_DIED, 4);
+}
+
+bool TurtleLuaEngine::OnCreatureSummoned(Creature* creature, Unit* summoner)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled() || !creature || !summoner)
+        return false;
+
+    lua_pushinteger(_state, CREATURE_EVENT_ON_SUMMONED);
+    PushCreature(creature);
+    PushUnit(summoner);
+    return CallCreatureEvent(creature, CREATURE_EVENT_ON_SUMMONED, 3);
 }
 
 bool TurtleLuaEngine::OnCreatureMoveInLOS(Creature* creature, Unit* who)

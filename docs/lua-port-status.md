@@ -88,6 +88,7 @@ E:\TurtleBY
 - 全局 Group/Guild 事件补充：新增 `RegisterGroupEvent`、`RegisterGuildEvent`、`ClearGroupEvents`、`ClearGuildEvents`，并在 `Group.cpp` / `Guild.cpp` 接入真实触发点。
 - 全局玩家 Gossip 事件补充：新增 `RegisterPlayerGossipEvent`、`ClearPlayerGossipEvents`，并在客户端选择玩家自身 Gossip 菜单项时回调 Lua。
 - 全局唯一 Creature 事件补充：新增 `RegisterUniqueCreatureEvent`、`ClearUniqueCreatureEvents`，按 `ObjectGuid + instanceId + eventId` 绑定单个已经刷出的生物；它和 `RegisterCreatureEvent` 共用现有 Creature 事件触发点，同一事件会先执行 entry 绑定，再执行唯一生物绑定，支持 `shots` 和返回取消函数。
+- Creature 召唤/战斗前事件补充：`RegisterCreatureEvent(entry, 10, ...)` 已在 Creature 真正开始攻击前触发，回调返回 `true` 会阻止本次攻击启动；`21` 已在召唤物死亡并通知召唤者 AI 前触发，参数为 `(event, creature, summon, killer)`，返回 `true` 会跳过原召唤者 AI 的死亡通知；`22` 已在临时召唤物进入世界时触发，参数为 `(event, creature, summoner)`，当前只做 Lua 通知，没有可跳过的 1.12 原生 `IsSummonedBy` 流程。
 - 全局 Map/Instance 副本事件补充：新增 `RegisterMapEvent`、`RegisterInstanceEvent`、`ClearMapEvents`、`ClearInstanceEvents`。`RegisterMapEvent(mapId, eventId, function)` 按地图 ID 绑定该地图所有副本实例；`RegisterInstanceEvent(instanceId, eventId, function)` 按运行时实例 ID 绑定单个实例。同一副本事件会先执行 mapId 绑定，再执行 instanceId 绑定。当前已触发事件 `1` 初始化、`2` 加载、`3` 更新、`4` 玩家进入、`5` Creature 创建、`6` GameObject 创建；事件 `7` 检查战斗进度还没有统一安全触发点，暂不触发。
 - 全局战场事件补充：新增 `RegisterBGEvent`、`ClearBattleGroundEvents`，并接入战场创建、开始、结束和销毁前事件；新增 `BattleGround` 对象封装，当前 `BattleGroundMethods.h` 参考方法差异为 `ref=17 target=19 missing=0`，支持 `shots` 和返回取消函数。
 - 全局工单事件补充：新增 `RegisterTicketEvent`、`ClearTicketEvents`，并接入工单创建、玩家更新文本、关闭事件；新增 `Ticket` 对象封装，当前 `TicketMethods.h` 参考方法差异为 `ref=25 target=25 missing=0`。Turtle 1.12 没有独立的自动 resolve 核心流程，`4` 号 resolve 事件当前会在 Lua 调用 `ticket:SetResolvedBy()` 或 `ticket:SetCompleted()` 时触发。
@@ -2673,7 +2674,7 @@ end
 - 地图创建、销毁、玩家进入/离开、地图 Update 事件，以及按 mapId / instanceId 绑定的副本生命周期事件。
 - 战场创建、开始、结束、销毁前事件和 `BattleGround` 基础对象。
 - 工单创建、玩家更新文本、关闭事件和 `Ticket` 基础对象。
-- NPC 战斗、死亡、重生、AI Update。
+- NPC 战斗前拦截、进入/离开战斗、死亡、重生、AI Update、召唤、召唤物死亡/消失。
 - 按模板 entry 绑定的 Creature 事件，以及按 `ObjectGuid + instanceId` 绑定的唯一 Creature 事件。
 - Creature / GameObject / Item 的任务、Gossip、使用入口。
 - Item DummyEffect、Expire、Remove 事件。

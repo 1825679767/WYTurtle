@@ -278,8 +278,12 @@ void Creature::AddToWorld()
         if (IsTemporarySummon())
         {
             TemporarySummon* summon = static_cast<TemporarySummon*>(this);
+            Unit* summoner = summon->GetSummoner();
+            if (summoner)
+                sTurtleLuaEngine.OnCreatureSummoned(this, summoner);
+
             if (summon->GetSummonerGuid().IsPlayer())
-                if (Unit* summoner = summon->GetSummoner())
+                if (summoner)
                     if (Player* player = summoner->ToPlayer())
                         sTurtleLuaEngine.OnPetAddedToWorld(player, this);
         }
