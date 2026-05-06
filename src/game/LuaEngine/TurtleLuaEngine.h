@@ -86,6 +86,7 @@ enum TurtleLuaPlayerEvents
     PLAYER_EVENT_ON_UPDATE_AREA = 47,
     PLAYER_EVENT_ON_CAN_INIT_TRADE = 48,
     PLAYER_EVENT_ON_CAN_SEND_MAIL = 49,
+    PLAYER_EVENT_ON_CAN_JOIN_LFG = 50,
     PLAYER_EVENT_ON_QUEST_REWARD_ITEM = 51,
     PLAYER_EVENT_ON_CREATE_ITEM = 52,
     PLAYER_EVENT_ON_STORE_NEW_ITEM = 53,
@@ -316,6 +317,7 @@ public:
     bool OnPlayerCommand(Player* player, std::string const& command);
     bool OnPlayerCanInitTrade(Player* player, Player* target);
     bool OnPlayerCanSendMail(Player* player, ObjectGuid const& receiverGuid, ObjectGuid const& mailboxGuid, std::string const& subject, std::string const& body, uint32 money, uint32 cod, Item* item);
+    bool OnPlayerCanJoinLFG(Player* player, uint32 areaId);
     void OnPlayerEnterCombat(Player* player, Unit* enemy);
     void OnPlayerLeaveCombat(Player* player);
     void OnPlayerQuestRewardItem(Player* player, Item* item, uint32 count);

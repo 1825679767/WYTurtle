@@ -97,6 +97,7 @@ E:\TurtleBY
 - 全局 AreaTrigger / Weather 事件补充：`RegisterServerEvent(24, ...)` 已在玩家触发合法 AreaTrigger 后、原有脚本/传送逻辑前触发，参数为 `(event, player, triggerId)`，回调返回 `true` 会阻止后续默认处理；`RegisterServerEvent(25, ...)` 已在天气实际发送给区域玩家后触发，参数为 `(event, zoneId, state, grade)`。
 - 全局 Auction 事件补充：`RegisterServerEvent(26..29, ...)` 已接入拍卖创建、取消、成交、过期流程，参数为 `(event, auctionId, owner, item, expireTime, buyout, startBid, currentBid, bidderGUIDLow)`；和参考 Eluna 一样，拥有者不在线或物品对象不存在时不会触发。
 - 全局 Creature/GameObject 删除事件补充：`RegisterServerEvent(31, ...)` / `32` 已接入对象从世界移除的路径，参数分别为 `(event, creature)`、`(event, gameobject)`；它们会和 entry 级 `CREATURE_EVENT_ON_REMOVE`、`GAMEOBJECT_EVENT_ON_REMOVE` 同一次移除并行触发。
+- Player LFG 入队检查事件补充：`RegisterPlayerEvent(50, ...)` 已接入 1.12 Meeting Stone 入队流程，参数为 `(event, player, roles, dungeons, comment)`；Turtle 没有 3.3.5 的职责/地下城列表/注释结构，所以 `roles` 固定为 `0`，`dungeons` 为只包含 meeting stone `areaId` 的 Lua table，`comment` 为空字符串，回调返回 `false` 会阻止入队。
 - 全局出租路径函数补充：新增 `AddTaxiPath(waypoints, mountA, mountH[, price[, pathId]])`，会在运行时创建临时 TaxiNode、TaxiPath 和 TaxiPathNode 数据，并返回可传给 `player:StartTaxi(pathId)` 的路径 ID。Lua 的 `Player:StartTaxi()` 当前按脚本入口跳过已知飞行点检查，以便自定义路径可直接使用。
 - SpellInfo 3.3.5 参考方法名补齐：`HasAreaAuraEffect`、`IsAffectingArea`、`IsTargetingArea`、`NeedsExplicitUnitTarget`、`GetSpellSpecific`、`GetDispelMask`、`CheckTarget`、`CheckExplicitTarget` 等。当前 `SpellInfoMethods.h` 参考方法差异为 `missing=0`，其中部分检查按 Turtle 1.12 能力做兼容近似。
 - SpellEntry 旧接口兼容补齐：`SpellEntryMethods.h` 的 92 个参考方法名已经并入 `SpellInfo` 元表，当前差异扫描为 `ref=92 target=165 missing=0`。本批补上了 `GetSpellName`、`GetDurationIndex`、`GetManaCostPerlevel`、`GetManaPerSecond`、`GetEquippedItemClass`、`GetEffectRealPointsPerLevel`、`GetEffectRadiusIndex`、`GetEffectDamageMultiplier`、`GetEffectBonusMultiplier`、`GetTotemCategory`、`GetAreaGroupId`、`GetRuneCostID` 等兼容入口；WotLK 专属字段按 Turtle 1.12 能力返回 `0` 或全 0 table。
@@ -2687,6 +2688,7 @@ end
 - AreaTrigger 触发和 Weather 变化事件。
 - Auction 创建、取消、成交、过期事件。
 - 全局 Creature / GameObject 从世界移除事件。
+- Meeting Stone / LFG 入队检查事件。
 - 动态 `Spell` 对象和 Prepare / Cast / Cancel 施法事件。
 - `Quest` 对象。
 - `ItemTemplate` 物品模板对象。

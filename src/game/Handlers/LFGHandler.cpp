@@ -37,6 +37,9 @@
 #include "Group.h"
 #include "LFGHandler.h"
 #include "LFGMgr.h"
+#ifdef USE_LUA
+#include "TurtleLuaEngine.h"
+#endif
 
 void WorldSession::HandleMeetingStoneJoinOpcode(WorldPacket& recv_data)
 {
@@ -86,6 +89,11 @@ void WorldSession::HandleMeetingStoneJoinOpcode(WorldPacket& recv_data)
 
 
    GameObjectInfo const* gInfo = sObjectMgr.GetGameObjectInfo(obj->GetEntry());
+
+#ifdef USE_LUA
+   if (!sTurtleLuaEngine.OnPlayerCanJoinLFG(_player, gInfo->meetingstone.areaID))
+       return;
+#endif
 
    sLFGMgr.AddToQueue(_player, gInfo->meetingstone.areaID);
 }

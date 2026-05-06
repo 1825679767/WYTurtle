@@ -23583,6 +23583,51 @@ bool TurtleLuaEngine::OnPlayerCanSendMail(Player* player, ObjectGuid const& rece
     return allowed;
 }
 
+bool TurtleLuaEngine::OnPlayerCanJoinLFG(Player* player, uint32 areaId)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled() || !player)
+        return true;
+
+    auto itr = _playerEvents.find(PLAYER_EVENT_ON_CAN_JOIN_LFG);
+    if (itr == _playerEvents.end())
+        return true;
+
+    bool allowed = true;
+    std::vector<int> functionRefs = itr->second;
+    for (int functionRef : functionRefs)
+    {
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        lua_pushinteger(_state, PLAYER_EVENT_ON_CAN_JOIN_LFG);
+        PushPlayer(player);
+        lua_pushinteger(_state, 0);
+        lua_newtable(_state);
+        lua_pushinteger(_state, areaId);
+        lua_rawseti(_state, -2, 1);
+        lua_pushliteral(_state, "");
+
+        if (lua_pcall(_state, 5, 1, 0) != LUA_OK)
+        {
+            LogError("player can join lfg event");
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        if (lua_isboolean(_state, -1) && !lua_toboolean(_state, -1))
+            allowed = false;
+        lua_pop(_state, 1);
+    }
+
+    return allowed;
+}
+
 void TurtleLuaEngine::OnPlayerEnterCombat(Player* player, Unit* enemy)
 {
     std::lock_guard<std::recursive_mutex> guard(_lock);
