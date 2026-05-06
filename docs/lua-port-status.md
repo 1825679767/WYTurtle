@@ -61,7 +61,7 @@ E:\TurtleBY
 - Corpse 对象封装：`Player:GetCorpse()`、`Object:ToCorpse()` 和地图按 GUID 查询现在可以返回 `Corpse` 对象；`CorpseMethods.h` 参考方法差异为 `ref=5 target=67 missing=0`。`SaveToDB()` 对骨骸类型当前做 no-op，避免触发 Turtle 1.12 的骨骸保存断言。
 - Item 兼容补齐：`GetItemLink`、`GetRandomSuffix`、`IsCurrencyToken`、`IsWeaponVellum`、`IsArmorVellum`、`IsRefundExpired`。
 - Quest 兼容补齐：`HasFlag`、`IsDaily`、`GetNextQuestId`、`GetPrevQuestId`、`GetNextQuestInChain`、`GetType`。
-- Map 兼容补齐：`IsArena`、`IsEmpty`、`IsHeroic`、`GetDifficulty`、`GetHeight`、`GetAreaId`、`GetCreatures`、`GetCreaturesByAreaId`、`SetWeather`、`GetInstanceData`、`SaveInstanceData`。
+- Map 兼容补齐：`IsArena`、`IsEmpty`、`IsHeroic`、`GetDifficulty`、`GetHeight`、`GetAreaId`、`GetCreatures`、`GetCreaturesByAreaId`、`GetPlayers`、`GetPlayerCount`、`SetWeather`、`GetInstanceData`、`SaveInstanceData`。其中 `GetCreatures()` / `GetCreaturesByAreaId()` 现在可以枚举普通大陆地图和副本地图，不再只限副本；`GetPlayers([team])` 和 `GetPlayerCount([team])` 支持按 `TEAM_ALLIANCE` / `TEAM_HORDE` 过滤，`GetPlayerCount()` 按 Eluna 语义不统计 GM。
 - InstanceData 基础对象封装：`Map:GetInstanceData()` 现在会返回 Turtle 副本脚本对象，支持 `GetData` / `SetData` / `GetData64` / `SetData64` / `GetGuid` / `SetGuid` / `SaveToDB` 等核心真实入口。
 - GameObject 兼容补齐：`HasQuest`、`IsTransport`、`IsActive`、`IsDestructible`、`GetLootRecipient`、`GetLootRecipientGroup`、`AddLoot`、`SaveToDB`、`RemoveFromWorld`、`UseDoorOrButton`、`Despawn`、`SetRespawnTime`。
 - ItemTemplate 图标补齐：核心现在加载 `ItemDisplayInfo.dbc` 的物品图标字段，`template:GetIcon()` 会按物品 `DisplayInfoID` 返回真实图标名，例如 `INV_Misc_QuestionMark` 这一类客户端图标路径名。
@@ -2549,7 +2549,7 @@ Map 兼容说明：
 - Turtle 1.12 没有 3.3.5 的英雄/竞技场副本难度系统，所以 `IsHeroic()`、`IsArena()` 当前返回 `false`，`GetDifficulty()` 返回 `0`。
 - `GetHeight(x, y, z)` 读取当前地图地形高度，坐标无效或没有高度时返回 `nil`。
 - `GetAreaId(x, y, z)` 读取当前坐标所在 Area，失败时返回 `0`。
-- `GetCreatures()` / `GetCreaturesByAreaId(areaId)` 当前只枚举副本地图里已经加载的 Creature；普通大陆地图对象仓库没有公开枚举入口，所以会返回空表。
+- `GetCreatures()` / `GetCreaturesByAreaId(areaId)` 枚举当前地图对象仓库中已经加载的 Creature；普通大陆地图也能返回当前已加载网格里的生物，但不会强制加载未激活网格。
 - `SetWeather(zoneId, weatherType, grade, permanent)` 会直接改变天气。`weatherType` 使用核心天气类型，常见值为 `0` 晴天、`1` 雨、`2` 雪、`3` 沙尘。
 - `GetInstanceData()` 当前返回 Turtle 1.12 的副本脚本对象，不是 3.3.5 Eluna 的纯 Lua table；没有副本脚本时返回 `nil`。`SaveInstanceData()` 会在当前地图存在实例数据时保存。
 

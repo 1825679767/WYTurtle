@@ -712,6 +712,11 @@ class Map : public GridRefManager<NGridType>
         mutable std::shared_mutex m_objectsStore_lock;
         MapStoredObjectTypesContainer m_objectsStore;
 
+    public:
+        std::shared_mutex& GetObjectLock() { return m_objectsStore_lock; }
+        MapStoredObjectTypesContainer const& GetObjectStore() const { return m_objectsStore; }
+
+    protected:
         // Objects that must update even in inactive grids without activating them
         typedef std::set<Transport*> TransportsContainer;
         TransportsContainer _transports;

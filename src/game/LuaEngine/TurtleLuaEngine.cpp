@@ -14054,7 +14054,7 @@ int MapGetAreaId(lua_State* state)
 }
 
 template <class Predicate>
-int PushDungeonCreatures(lua_State* state, Map* map, Predicate predicate)
+int PushMapCreatures(lua_State* state, Map* map, Predicate predicate)
 {
     auto* engine = GetEngine(state);
     lua_newtable(state);
@@ -14062,12 +14062,8 @@ int PushDungeonCreatures(lua_State* state, Map* map, Predicate predicate)
     if (!engine || !map)
         return 1;
 
-    DungeonMap* dungeon = dynamic_cast<DungeonMap*>(map);
-    if (!dungeon)
-        return 1;
-
-    std::shared_lock<std::shared_mutex> lock(dungeon->GetObjectLock());
-    auto const& constStore = dungeon->GetObjectStore();
+    std::shared_lock<std::shared_mutex> lock(map->GetObjectLock());
+    auto const& constStore = map->GetObjectStore();
     typedef typename std::remove_const<typename std::remove_reference<decltype(constStore)>::type>::type StoreType;
     StoreType& store = const_cast<StoreType&>(constStore);
     auto range = store.template range<Creature>();
@@ -14089,14 +14085,14 @@ int PushDungeonCreatures(lua_State* state, Map* map, Predicate predicate)
 int MapGetCreatures(lua_State* state)
 {
     Map* map = CheckMap(state, 1);
-    return PushDungeonCreatures(state, map, [](Creature*) { return true; });
+    return PushMapCreatures(state, map, [](Creature*) { return true; });
 }
 
 int MapGetCreaturesByAreaId(lua_State* state)
 {
     Map* map = CheckMap(state, 1);
     int32 areaId = static_cast<int32>(luaL_optinteger(state, 2, -1));
-    return PushDungeonCreatures(state, map, [areaId](Creature* creature)
+    return PushMapCreatures(state, map, [areaId](Creature* creature)
     {
         return areaId < 0 || creature->GetAreaId() == static_cast<uint32>(areaId);
     });
@@ -14106,6 +14102,7 @@ int MapGetPlayers(lua_State* state)
 {
     auto* engine = GetEngine(state);
     Map* map = CheckMap(state, 1);
+    uint32 team = static_cast<uint32>(luaL_optinteger(state, 2, TEAM_NEUTRAL));
     lua_newtable(state);
 
     if (!engine || !map)
@@ -14116,6 +14113,9 @@ int MapGetPlayers(lua_State* state)
     {
         if (Player* player = ref->getSource())
         {
+            if (team != TEAM_NEUTRAL && player->GetTeamId() != team)
+                continue;
+
             engine->PushPlayer(player);
             lua_rawseti(state, -2, index++);
         }
@@ -14127,12 +14127,21 @@ int MapGetPlayers(lua_State* state)
 int MapGetPlayerCount(lua_State* state)
 {
     Map* map = CheckMap(state, 1);
+    uint32 team = static_cast<uint32>(luaL_optinteger(state, 2, TEAM_NEUTRAL));
     uint32 count = 0;
     if (map)
     {
         for (MapReference const* ref = map->GetPlayers().getFirst(); ref; ref = ref->next())
-            if (ref->getSource())
-                ++count;
+        {
+            Player* player = ref->getSource();
+            if (!player || player->IsGameMaster())
+                continue;
+
+            if (team != TEAM_NEUTRAL && player->GetTeamId() != team)
+                continue;
+
+            ++count;
+        }
     }
     lua_pushinteger(state, count);
     return 1;
