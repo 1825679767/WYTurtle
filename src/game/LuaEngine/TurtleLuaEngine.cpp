@@ -99,7 +99,6 @@ constexpr char const* SPELL_METATABLE = "Turtle.Spell";
 constexpr char const* SPELLINFO_METATABLE = "Turtle.SpellInfo";
 constexpr char const* SPELLTARGETS_METATABLE = "Turtle.SpellCastTargets";
 constexpr char const* GEMPROPERTIES_METATABLE = "Turtle.GemPropertiesEntry";
-constexpr char const* VEHICLE_METATABLE = "Turtle.Vehicle";
 constexpr char const* WORLDPACKET_METATABLE = "Turtle.WorldPacket";
 constexpr char const* ELUNAQUERY_METATABLE = "Turtle.ElunaQuery";
 constexpr char const* OBJECTGUID_METATABLE = "Turtle.ObjectGuid";
@@ -391,11 +390,6 @@ struct LuaGemPropertiesEntry
     uint32 id;
 };
 
-struct LuaVehicle
-{
-    Unit* base;
-};
-
 struct LuaWorldPacket
 {
     WorldPacket* packet;
@@ -666,11 +660,6 @@ SpellCastTargets const* CheckSpellTargets(lua_State* state, int index)
 LuaGemPropertiesEntry* CheckGemProperties(lua_State* state, int index)
 {
     return static_cast<LuaGemPropertiesEntry*>(luaL_checkudata(state, index, GEMPROPERTIES_METATABLE));
-}
-
-LuaVehicle* CheckVehicle(lua_State* state, int index)
-{
-    return static_cast<LuaVehicle*>(luaL_checkudata(state, index, VEHICLE_METATABLE));
 }
 
 WorldPacket* CheckWorldPacket(lua_State* state, int index)
@@ -9465,24 +9454,6 @@ int UnitIsInAccessiblePlaceFor(lua_State* state)
     return 1;
 }
 
-int UnitIsOnVehicle(lua_State* state)
-{
-    lua_pushboolean(state, false);
-    return 1;
-}
-
-int UnitGetVehicle(lua_State* state)
-{
-    lua_pushnil(state);
-    return 1;
-}
-
-int UnitGetVehicleKit(lua_State* state)
-{
-    lua_pushnil(state);
-    return 1;
-}
-
 int UnitHasAura(lua_State* state)
 {
     Unit* unit = CheckUnit(state, 1);
@@ -17095,54 +17066,6 @@ int GemPropertiesGetId(lua_State* state)
     return 1;
 }
 
-int VehicleIsOnBoard(lua_State* state)
-{
-    (void)CheckVehicle(state, 1);
-    (void)CheckUnit(state, 2);
-    lua_pushboolean(state, false);
-    return 1;
-}
-
-int VehicleGetOwner(lua_State* state)
-{
-    LuaVehicle* vehicle = CheckVehicle(state, 1);
-    if (TurtleLuaEngine* engine = GetEngine(state))
-        engine->PushUnit(vehicle ? vehicle->base : nullptr);
-    else
-        lua_pushnil(state);
-    return 1;
-}
-
-int VehicleGetEntry(lua_State* state)
-{
-    LuaVehicle* vehicle = CheckVehicle(state, 1);
-    lua_pushinteger(state, vehicle && vehicle->base ? vehicle->base->GetEntry() : 0);
-    return 1;
-}
-
-int VehicleGetPassenger(lua_State* state)
-{
-    (void)CheckVehicle(state, 1);
-    (void)luaL_checkinteger(state, 2);
-    lua_pushnil(state);
-    return 1;
-}
-
-int VehicleAddPassenger(lua_State* state)
-{
-    (void)CheckVehicle(state, 1);
-    (void)CheckUnit(state, 2);
-    (void)luaL_checkinteger(state, 3);
-    return 0;
-}
-
-int VehicleRemovePassenger(lua_State* state)
-{
-    (void)CheckVehicle(state, 1);
-    (void)CheckUnit(state, 2);
-    return 0;
-}
-
 int WorldPacketGetOpcode(lua_State* state)
 {
     WorldPacket* packet = RequireWorldPacket(state, 1);
@@ -17867,7 +17790,6 @@ void TurtleLuaEngine::OpenState()
     RegisterSpellInfoMetatable();
     RegisterSpellTargetsMetatable();
     RegisterGemPropertiesMetatable();
-    RegisterVehicleMetatable();
     RegisterWorldPacketMetatable();
     RegisterQueryMetatable();
     RegisterObjectGuidMetatable();
@@ -18191,9 +18113,6 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "GetCurrentSpell", &UnitGetCurrentSpell);
     SetMethod(_state, "HandleStatModifier", &UnitHandleStatModifier);
     SetMethod(_state, "IsInAccessiblePlaceFor", &UnitIsInAccessiblePlaceFor);
-    SetMethod(_state, "IsOnVehicle", &UnitIsOnVehicle);
-    SetMethod(_state, "GetVehicle", &UnitGetVehicle);
-    SetMethod(_state, "GetVehicleKit", &UnitGetVehicleKit);
     SetMethod(_state, "HasAura", &UnitHasAura);
     SetMethod(_state, "GetAura", &UnitGetAura);
     SetMethod(_state, "AddAura", &UnitAddAura);
@@ -18830,9 +18749,6 @@ void TurtleLuaEngine::RegisterCreatureMetatable()
     SetMethod(_state, "GetCurrentSpell", &UnitGetCurrentSpell);
     SetMethod(_state, "HandleStatModifier", &UnitHandleStatModifier);
     SetMethod(_state, "IsInAccessiblePlaceFor", &UnitIsInAccessiblePlaceFor);
-    SetMethod(_state, "IsOnVehicle", &UnitIsOnVehicle);
-    SetMethod(_state, "GetVehicle", &UnitGetVehicle);
-    SetMethod(_state, "GetVehicleKit", &UnitGetVehicleKit);
     SetMethod(_state, "HasAura", &UnitHasAura);
     SetMethod(_state, "GetAura", &UnitGetAura);
     SetMethod(_state, "AddAura", &UnitAddAura);
@@ -20280,22 +20196,6 @@ void TurtleLuaEngine::RegisterGemPropertiesMetatable()
     lua_newtable(_state);
     SetMethod(_state, "GetId", &GemPropertiesGetId);
     SetMethod(_state, "GetSpellItemEnchantement", &GemPropertiesGetSpellItemEnchantement);
-    lua_setfield(_state, -2, "__index");
-
-    lua_pop(_state, 1);
-}
-
-void TurtleLuaEngine::RegisterVehicleMetatable()
-{
-    luaL_newmetatable(_state, VEHICLE_METATABLE);
-
-    lua_newtable(_state);
-    SetMethod(_state, "IsOnBoard", &VehicleIsOnBoard);
-    SetMethod(_state, "GetOwner", &VehicleGetOwner);
-    SetMethod(_state, "GetEntry", &VehicleGetEntry);
-    SetMethod(_state, "GetPassenger", &VehicleGetPassenger);
-    SetMethod(_state, "AddPassenger", &VehicleAddPassenger);
-    SetMethod(_state, "RemovePassenger", &VehicleRemovePassenger);
     lua_setfield(_state, -2, "__index");
 
     lua_pop(_state, 1);

@@ -578,7 +578,6 @@ private:
     void RegisterSpellInfoMetatable();
     void RegisterSpellTargetsMetatable();
     void RegisterGemPropertiesMetatable();
-    void RegisterVehicleMetatable();
     void RegisterWorldPacketMetatable();
     void RegisterQueryMetatable();
     void RegisterObjectGuidMetatable();
