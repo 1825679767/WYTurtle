@@ -32,6 +32,7 @@ class WorldPacket;
 class WorldSession;
 class SpellCastTargets;
 class ObjectGuid;
+class QueryNamedResult;
 struct ItemPrototype;
 
 enum TurtleLuaPlayerEvents
@@ -441,6 +442,9 @@ public:
     void PushSpell(Spell* spell);
     void PushObjectGuid(ObjectGuid const& guid);
 
+    uint64 GetStateId() const { return _stateId; }
+    void EnqueueAsyncQueryResult(uint64 stateId, int functionRef, QueryNamedResult* result);
+
     uint32 CreateTimedEvent(int functionRef, uint32 delay, uint32 repeats);
     uint32 CreateTimedEvent(int functionRef, uint32 minDelay, uint32 maxDelay, uint32 repeats, WorldObject* object);
     bool RemoveTimedEvent(uint32 eventId);
@@ -478,6 +482,12 @@ private:
         ObjectGuid objectGuid;
         uint32 mapId;
         uint32 instanceId;
+    };
+
+    struct PendingAsyncQuery
+    {
+        int functionRef;
+        QueryNamedResult* result;
     };
 
     void OpenState();
@@ -534,14 +544,18 @@ private:
     bool CallEntryEvent(std::map<uint32, std::map<uint32, std::vector<int>>>& store, uint32 entry, uint32 eventId, int argCount);
     bool CallEntryEventForBoolean(std::map<uint32, std::map<uint32, std::vector<int>>>& store, uint32 entry, uint32 eventId, int argCount, bool expectedValue);
     void CallEntryEventIgnoreResult(std::map<uint32, std::map<uint32, std::vector<int>>>& store, uint32 entry, uint32 eventId, int argCount);
+    void UpdateAsyncQueries();
+    void ClearAsyncQueries();
     void UpdateTimedEvents(uint32 diff);
 
     lua_State* _state;
     bool _enabled;
     bool _reloadPending;
+    uint64 _stateId;
     uint32 _nextTimedEventId;
     std::string _scriptPath;
     std::recursive_mutex _lock;
+    std::mutex _asyncQueryLock;
     std::map<uint32, std::vector<int>> _serverEvents;
     std::map<uint32, std::vector<int>> _playerEvents;
     std::map<uint32, std::vector<int>> _groupEvents;
@@ -560,6 +574,7 @@ private:
     std::map<uint32, std::map<uint32, std::vector<int>>> _gameObjectGossipEvents;
     std::map<uint32, std::map<uint32, std::vector<int>>> _itemGossipEvents;
     std::map<uint32, std::map<uint32, std::vector<int>>> _playerGossipEvents;
+    std::vector<PendingAsyncQuery> _asyncQueries;
     std::vector<TimedEvent> _timedEvents;
 };
 

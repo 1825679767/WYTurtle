@@ -8,6 +8,7 @@
 #include "AI/CreatureAI.h"
 #include "Config/Config.h"
 #include "Database/DatabaseEnv.h"
+#include "Database/SqlOperations.h"
 #include "Database/SQLStorages.h"
 #include "GossipDef.h"
 #include "Group.h"
@@ -2081,6 +2082,56 @@ int QueryGC(lua_State* state)
     return 0;
 }
 
+class LuaAsyncNamedQueryOperation : public SqlOperation
+{
+public:
+    LuaAsyncNamedQueryOperation(std::string sql, uint64 stateId, int functionRef)
+        : _sql(std::move(sql)), _stateId(stateId), _functionRef(functionRef)
+    {
+    }
+
+    bool Execute(SqlConnection* conn) override
+    {
+        QueryNamedResult* result = nullptr;
+        {
+            SqlConnection::Lock guard(conn);
+            result = guard->QueryNamed(_sql.c_str());
+        }
+
+        sTurtleLuaEngine.EnqueueAsyncQueryResult(_stateId, _functionRef, result);
+        return true;
+    }
+
+private:
+    std::string _sql;
+    uint64 _stateId;
+    int _functionRef;
+};
+
+int LuaDBQueryAsync(lua_State* state, Database& database)
+{
+    auto* engine = GetEngine(state);
+    if (!engine)
+        return luaL_error(state, "Lua engine is not available");
+
+    char const* sql = luaL_checkstring(state, 1);
+    luaL_checktype(state, 2, LUA_TFUNCTION);
+
+    lua_pushvalue(state, 2);
+    int functionRef = luaL_ref(state, LUA_REGISTRYINDEX);
+    if (functionRef == LUA_REFNIL || functionRef == LUA_NOREF)
+        return luaL_argerror(state, 2, "unable to make a ref to function");
+
+    if (!database)
+    {
+        luaL_unref(state, LUA_REGISTRYINDEX, functionRef);
+        return luaL_error(state, "database is not available");
+    }
+
+    database.AddToDelayQueue(new LuaAsyncNamedQueryOperation(sql, engine->GetStateId(), functionRef));
+    return 0;
+}
+
 int LuaWorldDBQuery(lua_State* state)
 {
     char const* sql = luaL_checkstring(state, 1);
@@ -2097,6 +2148,21 @@ int LuaLoginDBQuery(lua_State* state)
 {
     char const* sql = luaL_checkstring(state, 1);
     return PushQueryResult(state, LoginDatabase.QueryNamed(sql));
+}
+
+int LuaWorldDBQueryAsync(lua_State* state)
+{
+    return LuaDBQueryAsync(state, WorldDatabase);
+}
+
+int LuaCharDBQueryAsync(lua_State* state)
+{
+    return LuaDBQueryAsync(state, CharacterDatabase);
+}
+
+int LuaLoginDBQueryAsync(lua_State* state)
+{
+    return LuaDBQueryAsync(state, LoginDatabase);
 }
 
 int LuaWorldDBExecute(lua_State* state)
@@ -16102,7 +16168,7 @@ void SetGlobalInteger(lua_State* state, char const* name, lua_Integer value)
 TurtleLuaEngine sTurtleLuaEngine;
 
 TurtleLuaEngine::TurtleLuaEngine()
-    : _state(nullptr), _enabled(false), _reloadPending(false), _nextTimedEventId(1)
+    : _state(nullptr), _enabled(false), _reloadPending(false), _stateId(1), _nextTimedEventId(1)
 {
 }
 
@@ -16167,8 +16233,71 @@ void TurtleLuaEngine::Update(uint32 diff)
     if (!IsEnabled())
         return;
 
+    UpdateAsyncQueries();
     UpdateTimedEvents(diff);
     CallServerEvent(WORLD_EVENT_ON_UPDATE, diff);
+}
+
+void TurtleLuaEngine::EnqueueAsyncQueryResult(uint64 stateId, int functionRef, QueryNamedResult* rawResult)
+{
+    std::unique_ptr<QueryNamedResult> result(rawResult);
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!_state || stateId != _stateId)
+        return;
+
+    std::lock_guard<std::mutex> queueGuard(_asyncQueryLock);
+    _asyncQueries.push_back(PendingAsyncQuery{ functionRef, result.release() });
+}
+
+void TurtleLuaEngine::UpdateAsyncQueries()
+{
+    std::vector<PendingAsyncQuery> readyQueries;
+    {
+        std::lock_guard<std::mutex> queueGuard(_asyncQueryLock);
+        readyQueries.swap(_asyncQueries);
+    }
+
+    for (PendingAsyncQuery& query : readyQueries)
+    {
+        std::unique_ptr<QueryNamedResult> result(query.result);
+
+        if (!_state)
+            continue;
+
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, query.functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            luaL_unref(_state, LUA_REGISTRYINDEX, query.functionRef);
+            continue;
+        }
+
+        PushQueryResult(_state, result.release());
+        if (lua_pcall(_state, 1, 0, 0) != LUA_OK)
+        {
+            LogError("async database query");
+            lua_pop(_state, 1);
+        }
+
+        luaL_unref(_state, LUA_REGISTRYINDEX, query.functionRef);
+    }
+}
+
+void TurtleLuaEngine::ClearAsyncQueries()
+{
+    std::vector<PendingAsyncQuery> pendingQueries;
+    {
+        std::lock_guard<std::mutex> queueGuard(_asyncQueryLock);
+        pendingQueries.swap(_asyncQueries);
+    }
+
+    for (PendingAsyncQuery& query : pendingQueries)
+    {
+        delete query.result;
+        if (_state)
+            luaL_unref(_state, LUA_REGISTRYINDEX, query.functionRef);
+    }
 }
 
 void TurtleLuaEngine::OpenState()
@@ -16221,6 +16350,8 @@ void TurtleLuaEngine::CloseState()
     if (_state)
         CallServerEvent(ELUNA_EVENT_ON_LUA_STATE_CLOSE);
 
+    ++_stateId;
+
     _serverEvents.clear();
     _playerEvents.clear();
     _battleGroundEvents.clear();
@@ -16237,6 +16368,7 @@ void TurtleLuaEngine::CloseState()
     _gameObjectGossipEvents.clear();
     _itemGossipEvents.clear();
     _playerGossipEvents.clear();
+    ClearAsyncQueries();
     _timedEvents.clear();
 
     if (_state)
@@ -16301,6 +16433,8 @@ void TurtleLuaEngine::RegisterGlobals()
     lua_register(_state, "bit_not", &LuaBitNot);
     lua_register(_state, "CreateLongLong", &LuaCreateLongLong);
     lua_register(_state, "CreateULongLong", &LuaCreateULongLong);
+    lua_register(_state, "CreateInt64", &LuaCreateLongLong);
+    lua_register(_state, "CreateUint64", &LuaCreateULongLong);
     lua_register(_state, "GetCurrTime", &LuaGetCurrTime);
     lua_register(_state, "GetTimeDiff", &LuaGetTimeDiff);
     lua_register(_state, "IsInventoryPos", &LuaIsInventoryPos);
@@ -16372,6 +16506,11 @@ void TurtleLuaEngine::RegisterGlobals()
     lua_register(_state, "CharacterDBQuery", &LuaCharDBQuery);
     lua_register(_state, "AuthDBQuery", &LuaLoginDBQuery);
     lua_register(_state, "LoginDBQuery", &LuaLoginDBQuery);
+    lua_register(_state, "WorldDBQueryAsync", &LuaWorldDBQueryAsync);
+    lua_register(_state, "CharDBQueryAsync", &LuaCharDBQueryAsync);
+    lua_register(_state, "CharacterDBQueryAsync", &LuaCharDBQueryAsync);
+    lua_register(_state, "AuthDBQueryAsync", &LuaLoginDBQueryAsync);
+    lua_register(_state, "LoginDBQueryAsync", &LuaLoginDBQueryAsync);
     lua_register(_state, "WorldDBExecute", &LuaWorldDBExecute);
     lua_register(_state, "CharDBExecute", &LuaCharDBExecute);
     lua_register(_state, "CharacterDBExecute", &LuaCharDBExecute);

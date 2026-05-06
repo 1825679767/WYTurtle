@@ -4,6 +4,15 @@ RegisterServerEvent(14, function(event)
     print("Lua server startup event fired")
 end)
 
+-- 异步数据库查询示例。callback 会回到 Lua 世界线程执行；无结果时 query 为 nil。
+-- WorldDBQueryAsync("SELECT entry, name FROM creature_template LIMIT 1", function(query)
+--     if query then
+--         print("Async creature template: " .. query:GetUInt32(0) .. " " .. query:GetString(1))
+--     else
+--         print("Async query returned no rows")
+--     end
+-- end)
+
 RegisterServerEvent(13, function(event, diff)
     -- World update event is intentionally quiet; use CreateLuaEvent for normal timers.
 end)
