@@ -14,6 +14,7 @@ class Player;
 class Creature;
 class GameObject;
 class Corpse;
+class DynamicObject;
 class Item;
 class Unit;
 class WorldObject;
@@ -327,6 +328,7 @@ public:
     void PushCreature(Creature* creature);
     void PushGameObject(GameObject* go);
     void PushCorpse(Corpse* corpse);
+    void PushDynamicObject(DynamicObject* dynObj);
     void PushItem(Item* item);
     void PushUnit(Unit* unit);
     void PushGroup(Group* group);
@@ -366,6 +368,7 @@ private:
     void RegisterCreatureMetatable();
     void RegisterGameObjectMetatable();
     void RegisterCorpseMetatable();
+    void RegisterDynamicObjectMetatable();
     void RegisterGameObjectTemplateMetatable();
     void RegisterItemMetatable();
     void RegisterItemTemplateMetatable();

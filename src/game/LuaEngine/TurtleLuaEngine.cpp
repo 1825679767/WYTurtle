@@ -24,6 +24,7 @@
 #include "ObjectMgr.h"
 #include "Objects/Creature.h"
 #include "Objects/Corpse.h"
+#include "Objects/DynamicObject.h"
 #include "Objects/Bag.h"
 #include "Objects/GameObject.h"
 #include "Objects/Item.h"
@@ -62,6 +63,7 @@ constexpr char const* PLAYER_METATABLE = "Turtle.Player";
 constexpr char const* CREATURE_METATABLE = "Turtle.Creature";
 constexpr char const* GAMEOBJECT_METATABLE = "Turtle.GameObject";
 constexpr char const* CORPSE_METATABLE = "Turtle.Corpse";
+constexpr char const* DYNAMICOBJECT_METATABLE = "Turtle.DynamicObject";
 constexpr char const* GAMEOBJECTTEMPLATE_METATABLE = "Turtle.GameObjectTemplate";
 constexpr char const* ITEM_METATABLE = "Turtle.Item";
 constexpr char const* ITEMTEMPLATE_METATABLE = "Turtle.ItemTemplate";
@@ -133,6 +135,11 @@ struct LuaGameObject
 struct LuaCorpse
 {
     Corpse* corpse;
+};
+
+struct LuaDynamicObject
+{
+    DynamicObject* dynObj;
 };
 
 struct LuaGameObjectTemplate
@@ -334,6 +341,12 @@ Corpse* CheckCorpse(lua_State* state, int index)
 {
     auto* holder = static_cast<LuaCorpse*>(luaL_checkudata(state, index, CORPSE_METATABLE));
     return holder ? holder->corpse : nullptr;
+}
+
+DynamicObject* CheckDynamicObject(lua_State* state, int index)
+{
+    auto* holder = static_cast<LuaDynamicObject*>(luaL_checkudata(state, index, DYNAMICOBJECT_METATABLE));
+    return holder ? holder->dynObj : nullptr;
 }
 
 GameObjectInfo const* CheckGameObjectTemplate(lua_State* state, int index)
@@ -573,6 +586,8 @@ void PushWorldObjectValue(lua_State* state, TurtleLuaEngine* engine, WorldObject
         engine->PushUnit(unit);
     else if (GameObject* go = dynamic_cast<GameObject*>(object))
         engine->PushGameObject(go);
+    else if (DynamicObject* dynObj = dynamic_cast<DynamicObject*>(object))
+        engine->PushDynamicObject(dynObj);
     else if (Corpse* corpse = dynamic_cast<Corpse*>(object))
         engine->PushCorpse(corpse);
     else
@@ -746,6 +761,9 @@ Object* CheckObject(lua_State* state, int index)
     if (luaL_testudata(state, index, CORPSE_METATABLE))
         return CheckCorpse(state, index);
 
+    if (luaL_testudata(state, index, DYNAMICOBJECT_METATABLE))
+        return CheckDynamicObject(state, index);
+
     if (luaL_testudata(state, index, ITEM_METATABLE))
         return CheckItem(state, index);
 
@@ -783,6 +801,9 @@ WorldObject* CheckWorldObject(lua_State* state, int index)
 
     if (luaL_testudata(state, index, CORPSE_METATABLE))
         return CheckCorpse(state, index);
+
+    if (luaL_testudata(state, index, DYNAMICOBJECT_METATABLE))
+        return CheckDynamicObject(state, index);
 
     return nullptr;
 }
@@ -2219,6 +2240,13 @@ int ObjectIsCorpse(lua_State* state)
     return 1;
 }
 
+int ObjectIsDynamicObject(lua_State* state)
+{
+    Object* object = CheckObject(state, 1);
+    lua_pushboolean(state, object && object->GetObjectGuid().IsDynamicObject());
+    return 1;
+}
+
 int ObjectIsWorldObject(lua_State* state)
 {
     Object* object = CheckObject(state, 1);
@@ -2461,6 +2489,17 @@ int ObjectToCorpse(lua_State* state)
     Object* object = CheckObject(state, 1);
     if (engine && object)
         engine->PushCorpse(object->ToCorpse());
+    else
+        lua_pushnil(state);
+    return 1;
+}
+
+int ObjectToDynamicObject(lua_State* state)
+{
+    TurtleLuaEngine* engine = GetEngine(state);
+    Object* object = CheckObject(state, 1);
+    if (engine && object)
+        engine->PushDynamicObject(dynamic_cast<DynamicObject*>(object));
     else
         lua_pushnil(state);
     return 1;
@@ -3990,6 +4029,98 @@ int CorpseSaveToDB(lua_State* state)
     Corpse* corpse = CheckCorpse(state, 1);
     if (corpse && corpse->GetType() != CORPSE_BONES)
         corpse->SaveToDB();
+    return 0;
+}
+
+int DynamicObjectGetName(lua_State* state)
+{
+    DynamicObject* dynObj = CheckDynamicObject(state, 1);
+    lua_pushstring(state, dynObj ? dynObj->GetName() : "");
+    return 1;
+}
+
+int DynamicObjectGetCaster(lua_State* state)
+{
+    TurtleLuaEngine* engine = GetEngine(state);
+    DynamicObject* dynObj = CheckDynamicObject(state, 1);
+    PushWorldObjectValue(state, engine, dynObj ? dynObj->GetCaster() : nullptr);
+    return 1;
+}
+
+int DynamicObjectGetUnitCaster(lua_State* state)
+{
+    TurtleLuaEngine* engine = GetEngine(state);
+    DynamicObject* dynObj = CheckDynamicObject(state, 1);
+    if (engine)
+        engine->PushUnit(dynObj ? dynObj->GetUnitCaster() : nullptr);
+    else
+        lua_pushnil(state);
+    return 1;
+}
+
+int DynamicObjectGetCasterGUID(lua_State* state)
+{
+    DynamicObject* dynObj = CheckDynamicObject(state, 1);
+    PushObjectGuidValue(state, dynObj ? dynObj->GetCasterGuid() : ObjectGuid());
+    return 1;
+}
+
+int DynamicObjectGetCasterGUIDLow(lua_State* state)
+{
+    DynamicObject* dynObj = CheckDynamicObject(state, 1);
+    lua_pushinteger(state, dynObj ? dynObj->GetCasterGuid().GetCounter() : 0);
+    return 1;
+}
+
+int DynamicObjectGetSpellId(lua_State* state)
+{
+    DynamicObject* dynObj = CheckDynamicObject(state, 1);
+    lua_pushinteger(state, dynObj ? dynObj->GetSpellId() : 0);
+    return 1;
+}
+
+int DynamicObjectGetEffIndex(lua_State* state)
+{
+    DynamicObject* dynObj = CheckDynamicObject(state, 1);
+    lua_pushinteger(state, dynObj ? dynObj->GetEffIndex() : 0);
+    return 1;
+}
+
+int DynamicObjectGetDuration(lua_State* state)
+{
+    DynamicObject* dynObj = CheckDynamicObject(state, 1);
+    lua_pushinteger(state, dynObj ? dynObj->GetDuration() : 0);
+    return 1;
+}
+
+int DynamicObjectGetRadius(lua_State* state)
+{
+    DynamicObject* dynObj = CheckDynamicObject(state, 1);
+    lua_pushnumber(state, dynObj ? dynObj->GetRadius() : 0.0f);
+    return 1;
+}
+
+int DynamicObjectGetType(lua_State* state)
+{
+    DynamicObject* dynObj = CheckDynamicObject(state, 1);
+    lua_pushinteger(state, dynObj ? dynObj->GetType() : 0);
+    return 1;
+}
+
+int DynamicObjectDelay(lua_State* state)
+{
+    DynamicObject* dynObj = CheckDynamicObject(state, 1);
+    int32 delay = static_cast<int32>(luaL_checkinteger(state, 2));
+    if (dynObj)
+        dynObj->Delay(delay);
+    return 0;
+}
+
+int DynamicObjectDelete(lua_State* state)
+{
+    DynamicObject* dynObj = CheckDynamicObject(state, 1);
+    if (dynObj)
+        dynObj->Delete();
     return 0;
 }
 
@@ -11660,6 +11791,21 @@ int MapGetGameObject(lua_State* state)
     return 1;
 }
 
+int MapGetDynamicObject(lua_State* state)
+{
+    auto* engine = GetEngine(state);
+    Map* map = CheckMap(state, 1);
+    ObjectGuid const* guid = CheckObjectGuid(state, 2);
+    DynamicObject* dynObj = map && guid ? map->GetDynamicObject(*guid) : nullptr;
+
+    if (engine)
+        engine->PushDynamicObject(dynObj);
+    else
+        lua_pushnil(state);
+
+    return 1;
+}
+
 int MapGetUnit(lua_State* state)
 {
     auto* engine = GetEngine(state);
@@ -14213,7 +14359,9 @@ void SetObjectCompatMethods(lua_State* state)
     SetMethod(state, "SetInt16Value", &ObjectSetInt16Value);
     SetMethod(state, "SetUInt64Value", &ObjectSetUInt64Value);
     SetMethod(state, "IsCorpse", &ObjectIsCorpse);
+    SetMethod(state, "IsDynamicObject", &ObjectIsDynamicObject);
     SetMethod(state, "ToCorpse", &ObjectToCorpse);
+    SetMethod(state, "ToDynamicObject", &ObjectToDynamicObject);
     SetMethod(state, "ToCreature", &ObjectToCreature);
     SetMethod(state, "ToGameObject", &ObjectToGameObject);
     SetMethod(state, "ToPlayer", &ObjectToPlayer);
@@ -14330,6 +14478,7 @@ void TurtleLuaEngine::OpenState()
     RegisterCreatureMetatable();
     RegisterGameObjectMetatable();
     RegisterCorpseMetatable();
+    RegisterDynamicObjectMetatable();
     RegisterGameObjectTemplateMetatable();
     RegisterItemMetatable();
     RegisterItemTemplateMetatable();
@@ -15625,6 +15774,109 @@ void TurtleLuaEngine::RegisterCorpseMetatable()
     lua_pop(_state, 1);
 }
 
+void TurtleLuaEngine::RegisterDynamicObjectMetatable()
+{
+    luaL_newmetatable(_state, DYNAMICOBJECT_METATABLE);
+
+    lua_newtable(_state);
+    SetMethod(_state, "GetName", &DynamicObjectGetName);
+    SetMethod(_state, "GetEntry", &ObjectGetEntry);
+    SetMethod(_state, "GetGUIDLow", &ObjectGetGUIDLow);
+    SetMethod(_state, "GetGUID", &ObjectGetGUID);
+    SetMethod(_state, "GetGuid", &ObjectGetGUID);
+    SetMethod(_state, "GetObjectGuid", &ObjectGetGUID);
+    SetMethod(_state, "GetTypeId", &ObjectGetTypeId);
+    SetMethod(_state, "GetTypeID", &ObjectGetTypeId);
+    SetMethod(_state, "IsPlayer", &ObjectIsPlayer);
+    SetMethod(_state, "IsCreature", &ObjectIsCreature);
+    SetMethod(_state, "IsUnit", &ObjectIsUnit);
+    SetMethod(_state, "IsGameObject", &ObjectIsGameObject);
+    SetMethod(_state, "IsItem", &ObjectIsItem);
+    SetMethod(_state, "IsCorpse", &ObjectIsCorpse);
+    SetMethod(_state, "IsDynamicObject", &ObjectIsDynamicObject);
+    SetMethod(_state, "IsWorldObject", &ObjectIsWorldObject);
+    SetMethod(_state, "GetScale", &ObjectGetScale);
+    SetMethod(_state, "SetScale", &ObjectSetScale);
+    SetMethod(_state, "IsInWorld", &ObjectIsInWorld);
+    SetMethod(_state, "GetUInt32Value", &ObjectGetUInt32Value);
+    SetMethod(_state, "SetUInt32Value", &ObjectSetUInt32Value);
+    SetMethod(_state, "HasFlag", &ObjectHasFlag);
+    SetMethod(_state, "SetFlag", &ObjectSetFlag);
+    SetMethod(_state, "RemoveFlag", &ObjectRemoveFlag);
+    SetObjectCompatMethods(_state);
+    SetWorldObjectCompatMethods(_state);
+    SetMethod(_state, "GetMapId", &WorldObjectGetMapId);
+    SetMethod(_state, "GetMapID", &WorldObjectGetMapId);
+    SetMethod(_state, "GetMap", &WorldObjectGetMap);
+    SetMethod(_state, "GetPhaseMask", &WorldObjectGetPhaseMask);
+    SetMethod(_state, "SetPhaseMask", &WorldObjectSetPhaseMask);
+    SetMethod(_state, "GetInstanceId", &WorldObjectGetInstanceId);
+    SetMethod(_state, "GetInstanceID", &WorldObjectGetInstanceId);
+    SetMethod(_state, "GetZoneId", &WorldObjectGetZoneId);
+    SetMethod(_state, "GetZoneID", &WorldObjectGetZoneId);
+    SetMethod(_state, "GetAreaId", &WorldObjectGetAreaId);
+    SetMethod(_state, "GetAreaID", &WorldObjectGetAreaId);
+    SetMethod(_state, "GetX", &WorldObjectGetX);
+    SetMethod(_state, "GetY", &WorldObjectGetY);
+    SetMethod(_state, "GetZ", &WorldObjectGetZ);
+    SetMethod(_state, "GetO", &WorldObjectGetO);
+    SetMethod(_state, "GetLocation", &WorldObjectGetLocation);
+    SetMethod(_state, "GetDistance", &WorldObjectGetDistance);
+    SetMethod(_state, "GetDistance2d", &WorldObjectGetDistance2d);
+    SetMethod(_state, "GetDistance2D", &WorldObjectGetDistance2d);
+    SetMethod(_state, "GetExactDistance", &WorldObjectGetExactDistance);
+    SetMethod(_state, "GetExactDistance2d", &WorldObjectGetExactDistance2d);
+    SetMethod(_state, "GetExactDistance2D", &WorldObjectGetExactDistance2d);
+    SetMethod(_state, "GetRelativePoint", &WorldObjectGetRelativePoint);
+    SetMethod(_state, "GetAngle", &WorldObjectGetAngle);
+    SetMethod(_state, "IsWithinDist", &WorldObjectIsWithinDist);
+    SetMethod(_state, "IsWithinDist3d", &WorldObjectIsWithinDist3d);
+    SetMethod(_state, "IsWithinDist3D", &WorldObjectIsWithinDist3d);
+    SetMethod(_state, "IsWithinDist2d", &WorldObjectIsWithinDist2d);
+    SetMethod(_state, "IsWithinDist2D", &WorldObjectIsWithinDist2d);
+    SetMethod(_state, "IsWithinDistInMap", &WorldObjectIsWithinDistInMap);
+    SetMethod(_state, "IsInMap", &WorldObjectIsInMap);
+    SetMethod(_state, "IsInRange", &WorldObjectIsInRange);
+    SetMethod(_state, "IsInRange2d", &WorldObjectIsInRange2d);
+    SetMethod(_state, "IsInRange2D", &WorldObjectIsInRange2d);
+    SetMethod(_state, "IsInRange3d", &WorldObjectIsInRange3d);
+    SetMethod(_state, "IsInRange3D", &WorldObjectIsInRange3d);
+    SetMethod(_state, "IsInFront", &WorldObjectIsInFront);
+    SetMethod(_state, "IsInBack", &WorldObjectIsInBack);
+    SetMethod(_state, "IsWithinLOS", &WorldObjectIsWithinLOS);
+    SetMethod(_state, "IsInLineOfSight", &WorldObjectIsWithinLOS);
+    SetMethod(_state, "IsFriendlyTo", &WorldObjectIsFriendlyTo);
+    SetMethod(_state, "IsHostileTo", &WorldObjectIsHostileTo);
+    SetMethod(_state, "GetPlayersInRange", &WorldObjectGetPlayersInRange);
+    SetMethod(_state, "GetCreaturesInRange", &WorldObjectGetCreaturesInRange);
+    SetMethod(_state, "GetGameObjectsInRange", &WorldObjectGetGameObjectsInRange);
+    SetMethod(_state, "GetNearestPlayer", &WorldObjectGetNearestPlayer);
+    SetMethod(_state, "GetNearestCreature", &WorldObjectGetNearestCreature);
+    SetMethod(_state, "GetNearestGameObject", &WorldObjectGetNearestGameObject);
+    SetMethod(_state, "FindNearestPlayer", &WorldObjectFindNearestPlayer);
+    SetMethod(_state, "FindNearestCreature", &WorldObjectFindNearestCreature);
+    SetMethod(_state, "FindNearestGameObject", &WorldObjectFindNearestGameObject);
+    SetMethod(_state, "GetCaster", &DynamicObjectGetCaster);
+    SetMethod(_state, "GetUnitCaster", &DynamicObjectGetUnitCaster);
+    SetMethod(_state, "GetCasterGUID", &DynamicObjectGetCasterGUID);
+    SetMethod(_state, "GetCasterGuid", &DynamicObjectGetCasterGUID);
+    SetMethod(_state, "GetCasterGUIDLow", &DynamicObjectGetCasterGUIDLow);
+    SetMethod(_state, "GetCasterGuidLow", &DynamicObjectGetCasterGUIDLow);
+    SetMethod(_state, "GetSpellId", &DynamicObjectGetSpellId);
+    SetMethod(_state, "GetSpellID", &DynamicObjectGetSpellId);
+    SetMethod(_state, "GetEffIndex", &DynamicObjectGetEffIndex);
+    SetMethod(_state, "GetEffectIndex", &DynamicObjectGetEffIndex);
+    SetMethod(_state, "GetDuration", &DynamicObjectGetDuration);
+    SetMethod(_state, "GetRadius", &DynamicObjectGetRadius);
+    SetMethod(_state, "GetType", &DynamicObjectGetType);
+    SetMethod(_state, "Delay", &DynamicObjectDelay);
+    SetMethod(_state, "Delete", &DynamicObjectDelete);
+    SetMethod(_state, "Remove", &DynamicObjectDelete);
+    lua_setfield(_state, -2, "__index");
+
+    lua_pop(_state, 1);
+}
+
 void TurtleLuaEngine::RegisterGameObjectTemplateMetatable()
 {
     luaL_newmetatable(_state, GAMEOBJECTTEMPLATE_METATABLE);
@@ -16124,6 +16376,8 @@ void TurtleLuaEngine::RegisterMapMetatable()
     SetMethod(_state, "GetAnyTypeCreature", &MapGetCreature);
     SetMethod(_state, "GetGameObject", &MapGetGameObject);
     SetMethod(_state, "GetGO", &MapGetGameObject);
+    SetMethod(_state, "GetDynamicObject", &MapGetDynamicObject);
+    SetMethod(_state, "GetDynObject", &MapGetDynamicObject);
     SetMethod(_state, "GetUnit", &MapGetUnit);
     SetMethod(_state, "GetWorldObject", &MapGetWorldObject);
     SetMethod(_state, "GetWorldObjectOrPlayer", &MapGetWorldObjectOrPlayer);
@@ -16955,6 +17209,21 @@ void TurtleLuaEngine::PushCorpse(Corpse* corpse)
     holder->corpse = corpse;
 
     luaL_getmetatable(_state, CORPSE_METATABLE);
+    lua_setmetatable(_state, -2);
+}
+
+void TurtleLuaEngine::PushDynamicObject(DynamicObject* dynObj)
+{
+    if (!dynObj)
+    {
+        lua_pushnil(_state);
+        return;
+    }
+
+    auto* holder = static_cast<LuaDynamicObject*>(lua_newuserdata(_state, sizeof(LuaDynamicObject)));
+    holder->dynObj = dynObj;
+
+    luaL_getmetatable(_state, DYNAMICOBJECT_METATABLE);
     lua_setmetatable(_state, -2);
 }
 

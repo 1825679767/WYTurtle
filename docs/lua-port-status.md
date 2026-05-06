@@ -42,7 +42,7 @@ E:\TurtleBY
 - Player 任务关联：`HasQuestForGO`、`HasQuestForItem`、`CanShareQuest`、`SetQuestStatus`、`FailQuest`、`RemoveQuest`、`TalkedToCreature`。
 - Player 状态/聊天/战场：`CanSpeak`、`ToggleAFK`、`ToggleDND`、`SetGMVisible`、`SetGMChat`、`SetTaxiCheat`、`SetPvPDeath`、`InArena`、`InBattleground`、`InBattlegroundQueue`、`GetBattlegroundId`、`GetBattlegroundTypeId`。
 - Player 物品/耐久/击杀：`CanUseItem`、`CanEquipItem`、`DurabilityRepair`、`DurabilityRepairAll`、`DurabilityLoss`、`DurabilityLossAll`、`DurabilityPointsLoss`、`DurabilityPointsLossAll`、`DurabilityPointLossForEquipSlot`、`GetLifetimeKills`、`SetLifetimeKills`、`AddLifetimeKills`、`RemoveLifetimeKills`、`KillPlayer`、`SpawnBones`。
-- Object 通用兼容：补齐 `GetInt32Value`、`GetFloatValue`、`GetByteValue`、`GetUInt16Value`、`GetUInt64Value`、`SetInt32Value`、`UpdateUInt32Value`、`SetFloatValue`、`SetByteValue`、`SetUInt16Value`、`SetInt16Value`、`SetUInt64Value` 和 `ToPlayer` / `ToCreature` / `ToUnit` / `ToGameObject` / `ToCorpse`。
+- Object 通用兼容：补齐 `GetInt32Value`、`GetFloatValue`、`GetByteValue`、`GetUInt16Value`、`GetUInt64Value`、`SetInt32Value`、`UpdateUInt32Value`、`SetFloatValue`、`SetByteValue`、`SetUInt16Value`、`SetInt16Value`、`SetUInt64Value` 和 `ToPlayer` / `ToCreature` / `ToUnit` / `ToGameObject` / `ToCorpse` / `ToDynamicObject`。
 - WorldObject 通用兼容：`GetLocation`、`GetPhaseMask`、`SetPhaseMask`、`GetPlayersInRange`、`GetCreaturesInRange`、`GetGameObjectsInRange`、`GetNearestPlayer`、`GetNearestCreature`、`GetNearestGameObject`、`GetNearObject`、`GetNearObjects`、`IsInMap`、`IsInRange`、`IsInRange2d`、`IsInRange3d`、`IsInFront`、`IsInBack`、`SpawnCreature`、`PlayMusic`、`PlayDirectSound`、`PlayDistanceSound`。
 - Unit 通用兼容：`GetPowerPct`、`SetMaxPower`、`ModifyPower`、`GetRaceMask`、`GetClassMask`、`GetCreatureType`、`GetStat`、`GetMovementType`、`GetAttackers`、`GetCreatorGUID`、`GetMinionGUID`、`GetPetGUID`、`GetCritterGUID`、`GetControllerGUID`、`GetControllerGUIDS`、`HealthAbovePct`、`HealthBelowPct`、`IsFullHealth`、`IsInWater`、`IsUnderWater`、`IsMoving`、`IsFlying`、`IsCasting`、`IsPvPFlagged`、`IsStandState`、`IsVendor`、`IsTrainer`、`IsQuestGiver`、`IsGossip`、`IsTaxi`、`IsGuildMaster`、`IsBattleMaster`、`IsBanker`、`IsInnkeeper`、`IsSpiritHealer`、`IsSpiritGuide`、`IsTabardDesigner`、`IsAuctioneer`、`IsArmorer`、`IsServiceProvider`、`IsSpiritService`、`AddUnitState`、`ClearUnitState`、`ClearInCombat`、`StopSpellCast`、`InterruptSpell`、`PerformEmote`、`EmoteState`、`DeMorph`、`RestoreFaction`、`SetNativeDisplayId`、`RestoreDisplayId`、`SetSheath`、`SetRooted`、`SetConfused`、`SetFeared`、`SetFacing`、`SetFacingToObject`、`SetPvP`。
 - Unit 仇恨兼容：`GetThreatList`、`GetThreat`、`AddThreat`、`ModifyThreatPct`、`ModifyThreatPercent`、`ClearThreat`、`ResetAllThreat`、`ClearThreatList`。
@@ -67,6 +67,7 @@ E:\TurtleBY
 - WorldPacket 基础对象封装和包事件：`CreatePacket(opcode, size)` 现在返回 `WorldPacket` 对象，支持 opcode / size 查询、opcode 修改、基础整数/浮点/GUID/字符串读写；`Player`、`Group`、`Guild`、`WorldObject` 的 `SendPacket` 入口已经可以发送该对象；`RegisterPacketEvent(opcode, 5/7, function)` 已接入客户端入包和服务端出包拦截。
 - AddOn 消息事件：`RegisterServerEvent(30, function(event, sender, type, prefix, msg, target) end)` 已接入客户端插件消息，能在 Turtle 内置插件消息处理前拦截；`target` 可以是接收玩家、公会、队伍、频道 ID 或 `nil`。
 - Channel 基础对象封装：玩家频道聊天事件 `22` 现在按 3.3.5 Eluna 风格继续传频道数字 ID，并额外追加 `Channel` 对象；对象可读取频道名、频道 ID、人数、flags、安全等级、阵营、密码和成员状态，也能设置公告/密码/安全等级、设置成员主持/禁言、广播包或发送频道消息。
+- DynamicObject 基础对象封装：地图按 GUID 反查和通用 `WorldObject` 返回路径现在可以返回 `DynamicObject` 对象；脚本可读取施法者、施法者 GUID、法术 ID、效果索引、持续时间、半径和动态对象类型，也可调用 `Delay()` / `Delete()`。
 - SpellInfo 3.3.5 参考方法名补齐：`HasAreaAuraEffect`、`IsAffectingArea`、`IsTargetingArea`、`NeedsExplicitUnitTarget`、`GetSpellSpecific`、`GetDispelMask`、`CheckTarget`、`CheckExplicitTarget` 等。当前 `SpellInfoMethods.h` 参考方法差异为 `missing=0`，其中部分检查按 Turtle 1.12 能力做兼容近似。
 - SpellEntry 旧接口兼容补齐：`SpellEntryMethods.h` 的 92 个参考方法名已经并入 `SpellInfo` 元表，当前差异扫描为 `ref=92 target=165 missing=0`。本批补上了 `GetSpellName`、`GetDurationIndex`、`GetManaCostPerlevel`、`GetManaPerSecond`、`GetEquippedItemClass`、`GetEffectRealPointsPerLevel`、`GetEffectRadiusIndex`、`GetEffectDamageMultiplier`、`GetEffectBonusMultiplier`、`GetTotemCategory`、`GetAreaGroupId`、`GetRuneCostID` 等兼容入口；WotLK 专属字段按 Turtle 1.12 能力返回 `0` 或全 0 table。
 
@@ -680,6 +681,7 @@ obj:IsCreature()
 obj:IsUnit()
 obj:IsGameObject()
 obj:IsItem()
+obj:IsDynamicObject()
 obj:IsWorldObject()
 obj:GetScale()
 obj:SetScale(scale)
@@ -706,9 +708,10 @@ obj:ToCreature()
 obj:ToUnit()
 obj:ToGameObject()
 obj:ToCorpse()
+obj:ToDynamicObject()
 ```
 
-`Player`、`Creature`、`GameObject` 支持：
+`Player`、`Creature`、`GameObject`、`Corpse`、`DynamicObject` 支持：
 
 ```lua
 obj:GetMapId()
@@ -2014,6 +2017,36 @@ corpse:SaveToDB()
 - `GetType()` 使用 Turtle 的 `CorpseType`：`0` 骨骸，`1` 可复活 PvE 尸体，`2` 可复活 PvP 尸体。
 - `SaveToDB()` 对骨骸类型当前不执行保存，因为 Turtle 1.12 核心明确禁止保存骨骸，直接保存会触发断言。
 
+## DynamicObject 方法
+
+`DynamicObject` 是核心里用于暴风雪、奉献、光环云雾等动态法术区域的运行时对象。现在 `map:GetDynamicObject(guid)`、`map:GetWorldObject(guid)` 和通用 `WorldObject` 返回路径都可以返回它；它也继承常用 `Object` / `WorldObject` 方法，例如 `GetGUID()`、`GetGUIDLow()`、`GetMapId()`、`GetLocation()`、`GetDistance()`、`IsDynamicObject()`、`ToDynamicObject()` 等。
+
+```lua
+dyn:GetName()
+dyn:GetCaster()
+dyn:GetUnitCaster()
+dyn:GetCasterGUID()
+dyn:GetCasterGuid()
+dyn:GetCasterGUIDLow()
+dyn:GetCasterGuidLow()
+dyn:GetSpellId()
+dyn:GetSpellID()
+dyn:GetEffIndex()
+dyn:GetEffectIndex()
+dyn:GetDuration()
+dyn:GetRadius()
+dyn:GetType()
+dyn:Delay(ms)
+dyn:Delete()
+dyn:Remove()
+```
+
+说明：
+
+- `GetCaster()` 返回创建动态对象的 `WorldObject`，可能是玩家、生物或其他世界对象；`GetUnitCaster()` 只在施法者是单位时返回 `Unit`，否则返回 `nil`。
+- `GetSpellId()` / `GetSpellID()` 返回动态对象绑定的法术 ID，`GetEntry()` 也会返回同一个核心 entry 值。
+- `Delay(ms)` 会延长或缩短动态对象剩余时间；`Delete()` / `Remove()` 会请求核心删除该动态对象，脚本不要继续长期保存已经删除的对象引用。
+
 ## Group 方法
 
 `player:GetGroup()` 会返回玩家当前队伍对象，没有队伍时返回 `nil`。
@@ -2227,6 +2260,8 @@ map:GetCreature(guid)
 map:GetAnyTypeCreature(guid)
 map:GetGameObject(guid)
 map:GetGO(guid)
+map:GetDynamicObject(guid)
+map:GetDynObject(guid)
 map:GetUnit(guid)
 map:GetWorldObject(guid)
 map:GetWorldObjectOrPlayer(guid)
@@ -2236,7 +2271,7 @@ map:SaveInstanceData()
 ```
 
 `map:GetPlayers()` 返回当前地图在线玩家对象数组。
-按 GUID 反查对象只查找当前已经加载在该地图里的对象；玩家可以用 `map:GetWorldObjectOrPlayer(guid)` 从当前地图或在线玩家列表里找。当前 Lua 可返回 `Player`、`Creature`、`GameObject`、`Corpse` 这类对象；动态对象、运输船等还没有专门 userdata，遇到这些类型会返回 `nil`。
+按 GUID 反查对象只查找当前已经加载在该地图里的对象；玩家可以用 `map:GetWorldObjectOrPlayer(guid)` 从当前地图或在线玩家列表里找。当前 Lua 可返回 `Player`、`Creature`、`GameObject`、`Corpse`、`DynamicObject` 这类对象；运输船等还没有专门 userdata，遇到这些类型会返回 `nil`。
 
 Map 兼容说明：
 
@@ -2310,8 +2345,8 @@ end
 仍待继续补齐：
 
 - `WorldPacket` 基础对象封装、客户端入包事件和服务端出包事件已接入；未知包事件 `6` 暂不触发，因为 Turtle 队列阶段会直接跳过无处理 opcode。
-- `ObjectGuid` 已有值对象封装，并已支持 `Map` 按 GUID 反查 Player / Creature / GameObject / Corpse / Unit / WorldObject，以及 `Player` 按 GUID 反查自己背包或银行里的物品。Creature / GameObject / Corpse 不做全局离线查找，需要地图上下文。
-- `Creature`、`Player`、`Corpse`、`SpellInfo`、`Group`、`Guild`、`Map`、动态 `Spell`、通用 `Object` 和通用 `WorldObject` 的 3.3.5 参考方法名已补齐，不过部分接口按 Turtle 1.12 能力做兼容返回。
+- `ObjectGuid` 已有值对象封装，并已支持 `Map` 按 GUID 反查 Player / Creature / GameObject / DynamicObject / Corpse / Unit / WorldObject，以及 `Player` 按 GUID 反查自己背包或银行里的物品。Creature / GameObject / DynamicObject / Corpse 不做全局离线查找，需要地图上下文。
+- `Creature`、`Player`、`Corpse`、`DynamicObject`、`SpellInfo`、`Group`、`Guild`、`Map`、动态 `Spell`、通用 `Object` 和通用 `WorldObject` 的 3.3.5 参考方法名已补齐或基础接入，不过部分接口按 Turtle 1.12 能力做兼容返回。
 - `ItemTemplate` 的 3.3.5 参考方法名已补齐，其中 `GetIcon()` 因 Turtle 1.12 当前未加载图标路径字段而兼容返回空字符串。
 - 3.3.5 专属成就、竞技场点数、铭文/双天赋、LFG 和部分邮件/拍卖/银行/训练师细节目前仍是兼容返回或空入口，后续需要按 Turtle 1.12 的真实系统单独补强。
 - 3.3.5 玩家事件里 `45` 成就完成和 `50` LFG 入队检查没有 Turtle 1.12 等价系统，当前不接入。
