@@ -10283,6 +10283,15 @@ int CreatureSetHover(lua_State* state)
     return 0;
 }
 
+int CreatureSetDisableGravity(lua_State* state)
+{
+    Creature* creature = CheckCreature(state, 1);
+    bool enable = lua_isnoneornil(state, 2) ? true : lua_toboolean(state, 2) != 0;
+    if (creature)
+        creature->SetLevitate(enable);
+    return 0;
+}
+
 int CreatureSetEquipmentSlots(lua_State* state)
 {
     Creature* creature = CheckCreature(state, 1);
@@ -17808,7 +17817,7 @@ void TurtleLuaEngine::RegisterCreatureMetatable()
     SetMethod(_state, "SetUnitFlags", &CreatureSetUnitFlags);
     SetMethod(_state, "SetUnitFlagsTwo", &CreatureCompatNoop);
     SetMethod(_state, "SetReactState", &CreatureSetReactState);
-    SetMethod(_state, "SetDisableGravity", &CreatureCompatNoop);
+    SetMethod(_state, "SetDisableGravity", &CreatureSetDisableGravity);
     SetMethod(_state, "SetLootMode", &CreatureCompatNoop);
     SetMethod(_state, "SetDeathState", &CreatureSetDeathState);
     SetMethod(_state, "SetWalk", &CreatureSetWalk);
