@@ -1,0 +1,2201 @@
+# Lua 移植状态记录
+
+这份文档记录 `E:\GIT\WYwow\modules\mod-eluna` 的 3.3.5 Eluna 功能移植到
+`E:\GIT\WYTurtle` 这份 Turtle/MaNGOS 1.12 源码后的当前状态。
+
+当前实现不是把 AzerothCore 3.3.5 的 Eluna 原样照搬，而是做了一套适配
+Turtle 1.12 核心结构的 Lua 兼容层。它已经可以加载自定义 Lua 脚本，并支持
+常用事件、Gossip、任务对象、物品模板、生物模板、GameObject 模板、法术模板、施法目标、ObjectGuid、WorldPacket、玩家消息/提示发送、数据库访问、定时器和大量常用对象方法。
+
+## 当前实现位置
+
+```text
+E:\GIT\WYTurtle\src\game\LuaEngine\TurtleLuaEngine.h
+E:\GIT\WYTurtle\src\game\LuaEngine\TurtleLuaEngine.cpp
+E:\GIT\WYTurtle\lua_scripts\example.lua
+```
+
+Lua 5.2 构建目录：
+
+```text
+E:\GIT\WYTurtle\dep\lualib\lua
+```
+
+安装输出目录：
+
+```text
+E:\TurtleBY
+```
+
+## 编译状态
+
+当前状态：上一次已经通过 Release 编译；按当前要求，本轮后续新增函数暂不做中途完整编译，等 Lua 功能补齐后再统一编译和安装验证。
+
+最近新增并验证：
+
+- Creature 3.3.5 参考方法名补齐：本轮把 `CreatureMethods.h` 中 87 个参考方法名全部注册进 `RegisterCreatureMetatable()`；当前差异扫描结果为 `ref=87 target=340 missing=0`。真实接入的接口包括移动能力、精英/世界 Boss/守卫/触发器/平民/阵营领袖判断、任务和法术查询、法术冷却、NPC flags、Unit flags、模板字段、AI 名称、脚本名、脚本 ID、格挡值、归巢点、游荡半径、默认移动类型、当前路径点、拾取归属、仇恨目标列表、AI 选目标、攻击/呼救/协助、可否起手攻击、仇恨开关、进入全区战斗、尸体移除、重生、保存到数据库、变更 entry、死亡状态、反应状态、行走/悬浮、装备槽、禁止呼救/禁止搜索协助等。
+- Creature 1.12 兼容占位：Turtle 1.12 没有 3.3.5 的 LootMode、`UNIT_FIELD_FLAGS_2`、声望奖励禁用字段、公开尸体延迟 getter、Creature 数字 waypoint path 和 3.3.5 DungeonBoss 独立标记，所以这些接口当前按兼容方式处理：`GetLootMode()` 固定返回默认模式 `1`，`HasLootMode(1)` 返回真，其他 loot mode 修改函数为 no-op；`GetUnitFlagsTwo()` / `GetWaypointPath()` / `GetCorpseDelay()` 返回 `0`；`SetUnitFlagsTwo()`、`SetDisableGravity()`、`SetDisableReputationGain()` 为 no-op；`IsReputationGainDisabled()`、`IsDamageEnoughForLootingAndReward()` 返回 `false`；`IsDungeonBoss()` 暂按 `IsWorldBoss()` 近似。
+- Player 3.3.5 参考方法名补齐：本轮把 `PlayerMethods.h` 里剩余的 82 个缺失方法名全部注册进 `RegisterPlayerMetatable()`；当前差异扫描结果为 `ref=254 target=521 missing=0`。其中真实/近似接入的接口包括 `CanUninviteFromGroup`、`EquipItem`、`GetCompletedQuestsCount`、`GetCorpse`、`GetGossipTextId`、`GetHealthBonusFromStamina`、`GetHonorPoints`、`GetMailCount`、`GetMailItem`、`GetManaBonusFromIntellect`、`GetNextRandomRaidMember`、`GetPhaseMaskForSpawn`、`GetShieldBlockValue`、`GossipAddQuests`、`GossipSendPOI`、`GroupCreate`、`GroupInvite`、`HasTalent`、`HasTitle`、`LeaveBattleground`、`LogoutPlayer`、`ModifyHonorPoints`、`Mute`、`RemovedInsignia`、`RemoveFromBattlegroundRaid`、`RemoveFromGroup`、`ResetTalentsCost`、`ResetTypeCooldowns`、`RunCommand`、`SendAuctionMenu`、`SendGuildInvite`、`SendListInventory`、`SendMovieStart`、`SendQuestTemplate`、`SendShowBank`、`SendSpiritResurrect`、`SendTabardVendorActivate`、`SendTaxiMenu`、`SendTrainerList`、`SetFactionForRace`、`SetGender`、`SetGuildRank`、`SetHonorPoints`、`SetKnownTitle`、`SetPlayerLock`、`StartTaxi`、`SummonPlayer`、`UnbindAllInstances`、`UnbindInstance`、`UnsetKnownTitle`、`Whisper`。本批只做差异扫描和 Lua 示例语法检查，不做完整 CMake 编译。
+- Player 版本兼容占位：`CanTitanGrip`、成就系统、竞技场点数、雕文、双天赋/专精、职责专精判断、冠军战袍阵营、玩家设置、额外天赋点、`SendShowMailBox`、`SetSpellPower` 等接口在 Turtle 1.12 里没有对应 3.3.5 数据结构或安全直接入口，因此当前注册为返回 `0` / `false` / `nil` 或 no-op。这样旧 Eluna 脚本至少不会因为函数不存在而报错；后续如果确认 Turtle 有对应自定义系统，再把占位改成真实实现。
+- Player 特别说明：`GetCorpse()` 现在返回 `Corpse` 对象或 `nil`，和 3.3.5 Eluna 保持一致；需要尸体 GUID 时可继续调用 `corpse:GetGUID()` / `corpse:GetOwnerGUID()`；`GetHonorPoints()` 暂时映射到 Turtle 1.12 荣誉 RankPoints；`SendMovieStart()` 暂按 `SendCinematicStart()` 兼容处理；`SendShowMailBox()` 当前是 no-op，因为 1.12 客户端/核心没有 3.3.5 的直接打开邮箱包。
+- Player 分组/技能/法术/任务补充：`GetOriginalGroup`、`GetGroupInvite`、`GetSubGroup`、`GetOriginalSubGroup`、`GetTrader`、`GetInGameTime`、`GetSpells`、`AdvanceSkillsToMax`、`AdvanceSkill`、`AdvanceAllSkills`、`AddComboPoints`、`ClearComboPoints`、`LearnTalent`、`ResetTalents`、`ResetAllCooldowns`、`RemoveArenaSpellCooldowns`、`IsImmuneToDamage`、`SetBindPoint`、`GetHomebind`、`CanCompleteRepeatableQuest`、`GetQuestLevel`、`GetReqKillOrCastCurrentCount`。本批只做差异扫描和 Lua 示例语法检查，未做完整 CMake 编译。
+- Player 任务关联：`HasQuestForGO`、`HasQuestForItem`、`CanShareQuest`、`SetQuestStatus`、`FailQuest`、`RemoveQuest`、`TalkedToCreature`。
+- Player 状态/聊天/战场：`CanSpeak`、`ToggleAFK`、`ToggleDND`、`SetGMVisible`、`SetGMChat`、`SetTaxiCheat`、`SetPvPDeath`、`InArena`、`InBattleground`、`InBattlegroundQueue`、`GetBattlegroundId`、`GetBattlegroundTypeId`。
+- Player 物品/耐久/击杀：`CanUseItem`、`CanEquipItem`、`DurabilityRepair`、`DurabilityRepairAll`、`DurabilityLoss`、`DurabilityLossAll`、`DurabilityPointsLoss`、`DurabilityPointsLossAll`、`DurabilityPointLossForEquipSlot`、`GetLifetimeKills`、`SetLifetimeKills`、`AddLifetimeKills`、`RemoveLifetimeKills`、`KillPlayer`、`SpawnBones`。
+- Object 通用兼容：补齐 `GetInt32Value`、`GetFloatValue`、`GetByteValue`、`GetUInt16Value`、`GetUInt64Value`、`SetInt32Value`、`UpdateUInt32Value`、`SetFloatValue`、`SetByteValue`、`SetUInt16Value`、`SetInt16Value`、`SetUInt64Value` 和 `ToPlayer` / `ToCreature` / `ToUnit` / `ToGameObject` / `ToCorpse`。
+- WorldObject 通用兼容：`GetLocation`、`GetPhaseMask`、`SetPhaseMask`、`GetPlayersInRange`、`GetCreaturesInRange`、`GetGameObjectsInRange`、`GetNearestPlayer`、`GetNearestCreature`、`GetNearestGameObject`、`GetNearObject`、`GetNearObjects`、`IsInMap`、`IsInRange`、`IsInRange2d`、`IsInRange3d`、`IsInFront`、`IsInBack`、`SpawnCreature`、`PlayMusic`、`PlayDirectSound`、`PlayDistanceSound`。
+- Unit 通用兼容：`GetPowerPct`、`SetMaxPower`、`ModifyPower`、`GetRaceMask`、`GetClassMask`、`GetCreatureType`、`GetStat`、`GetMovementType`、`GetAttackers`、`GetCreatorGUID`、`GetMinionGUID`、`GetPetGUID`、`GetCritterGUID`、`GetControllerGUID`、`GetControllerGUIDS`、`HealthAbovePct`、`HealthBelowPct`、`IsFullHealth`、`IsInWater`、`IsUnderWater`、`IsMoving`、`IsFlying`、`IsCasting`、`IsPvPFlagged`、`IsStandState`、`IsVendor`、`IsTrainer`、`IsQuestGiver`、`IsGossip`、`IsTaxi`、`IsGuildMaster`、`IsBattleMaster`、`IsBanker`、`IsInnkeeper`、`IsSpiritHealer`、`IsSpiritGuide`、`IsTabardDesigner`、`IsAuctioneer`、`IsArmorer`、`IsServiceProvider`、`IsSpiritService`、`AddUnitState`、`ClearUnitState`、`ClearInCombat`、`StopSpellCast`、`InterruptSpell`、`PerformEmote`、`EmoteState`、`DeMorph`、`RestoreFaction`、`SetNativeDisplayId`、`RestoreDisplayId`、`SetSheath`、`SetRooted`、`SetConfused`、`SetFeared`、`SetFacing`、`SetFacingToObject`、`SetPvP`。
+- Unit 仇恨兼容：`GetThreatList`、`GetThreat`、`AddThreat`、`ModifyThreatPct`、`ModifyThreatPercent`、`ClearThreat`、`ResetAllThreat`、`ClearThreatList`。
+- Unit 状态/移动补充：`IsDying`、`IsCharmed`、`IsAttackingPlayer`、`GetRaceAsString`、`GetClassAsString`、`GetBaseSpellPower`、`SetPowerType`、`SetSpeed`、`SetSpeedRate`、`SetWaterWalk`、`SetFFA`、`SetInCombatWith`。
+- Unit 移动控制：`MoveStop`、`MoveExpire`、`MoveClear`、`MoveIdle`、`MoveRandom`、`MoveHome`、`MoveFollow`、`MoveChase`、`MoveConfused`、`MoveFleeing`、`MoveTo`、`MoveJump`。
+- Unit 施法兼容：`CastSpell`、`CastCustomSpell`、`CastSpellAoF`、`NearTeleport`。
+- Unit 聊天兼容：`SendUnitSay`、`SendUnitYell`、`SendUnitWhisper`、`SendUnitEmote`、`SendChatMessageToPlayer`。
+- Unit GUID/状态设置：`SetOwnerGUID`、`SetCreatorGUID`、`SetPetGUID`、`SetCritterGUID`、`SetName`、`SetImmuneTo`、`SetSanctuary`。
+- Unit 查询/战斗补充：`GetFriendlyUnitsInRange`、`GetUnfriendlyUnitsInRange`、`GetCurrentSpell`、`HandleStatModifier`、`IsInAccessiblePlaceFor`、`RemoveArenaAuras`、`DealDamage`、`DealHeal`。
+- Unit 载具兼容空入口：`IsOnVehicle`、`GetVehicle`、`GetVehicleKit`。Turtle 1.12 没有真实 Vehicle 系统，所以这些接口只用于兼容旧脚本。
+- Aura 基础对象封装：`Unit:GetAura`、`Unit:AddAura` 返回 `Aura` 对象，支持读取施法者、持续时间、最大持续时间、光环 ID、层数、拥有者，并支持设置持续时间、最大持续时间、层数和移除。
+- Corpse 对象封装：`Player:GetCorpse()`、`Object:ToCorpse()` 和地图按 GUID 查询现在可以返回 `Corpse` 对象；`CorpseMethods.h` 参考方法差异为 `ref=5 target=67 missing=0`。`SaveToDB()` 对骨骸类型当前做 no-op，避免触发 Turtle 1.12 的骨骸保存断言。
+- Item 兼容补齐：`GetItemLink`、`GetRandomSuffix`、`IsCurrencyToken`、`IsWeaponVellum`、`IsArmorVellum`、`IsRefundExpired`。
+- Quest 兼容补齐：`HasFlag`、`IsDaily`、`GetNextQuestId`、`GetPrevQuestId`、`GetNextQuestInChain`、`GetType`。
+- Map 兼容补齐：`IsArena`、`IsEmpty`、`IsHeroic`、`GetDifficulty`、`GetHeight`、`GetAreaId`、`GetCreatures`、`GetCreaturesByAreaId`、`SetWeather`、`GetInstanceData`、`SaveInstanceData`。
+- GameObject 兼容补齐：`HasQuest`、`IsTransport`、`IsActive`、`IsDestructible`、`GetLootRecipient`、`GetLootRecipientGroup`、`AddLoot`、`SaveToDB`、`RemoveFromWorld`、`UseDoorOrButton`、`Despawn`、`SetRespawnTime`。
+- Spell 兼容补齐：`IsAutoRepeat`、`SetAutoRepeat`、`Cast`、`Finish`、`GetDuration`、`GetReagentCost`、`GetTargetDest`。
+- Group 兼容补齐：`GetGUID`、`GetMemberGUID`、`GetGroupType`、`IsLFGGroup`、`IsAssistant`、`SameSubGroup`、`HasFreeSlotSubGroup`、`SetLeader`、`AddMember`、`RemoveMember`、`Disband`、`ConvertToRaid`、`SetMembersGroup`、`SetTargetIcon`、`SetMemberFlag`、`SendPacket`。
+- Guild 兼容补齐：`GetMembers`、`SetLeader`、`SetBankTabText`、`SendPacket`、`SendPacketToRanked`、`Disband`、`AddMember`、`DeleteMember`、`SetMemberRank`、`SetName`、`UpdateMemberData`、`MassInviteToEvent`、`SwapItems`、`SwapItemsWithInventory`、`GetTotalBankMoney`、`GetCreatedDate`、`ResetTimes`、`ModifyBankMoney`。
+- WorldPacket 基础对象封装：`CreatePacket(opcode, size)` 现在返回 `WorldPacket` 对象，支持 opcode / size 查询、opcode 修改、基础整数/浮点/GUID/字符串读写；`Player`、`Group`、`Guild`、`WorldObject` 的 `SendPacket` 入口已经可以发送该对象。
+- SpellInfo 3.3.5 参考方法名补齐：`HasAreaAuraEffect`、`IsAffectingArea`、`IsTargetingArea`、`NeedsExplicitUnitTarget`、`GetSpellSpecific`、`GetDispelMask`、`CheckTarget`、`CheckExplicitTarget` 等。当前 `SpellInfoMethods.h` 参考方法差异为 `missing=0`，其中部分检查按 Turtle 1.12 能力做兼容近似。
+- SpellEntry 旧接口兼容补齐：`SpellEntryMethods.h` 的 92 个参考方法名已经并入 `SpellInfo` 元表，当前差异扫描为 `ref=92 target=165 missing=0`。本批补上了 `GetSpellName`、`GetDurationIndex`、`GetManaCostPerlevel`、`GetManaPerSecond`、`GetEquippedItemClass`、`GetEffectRealPointsPerLevel`、`GetEffectRadiusIndex`、`GetEffectDamageMultiplier`、`GetEffectBonusMultiplier`、`GetTotemCategory`、`GetAreaGroupId`、`GetRuneCostID` 等兼容入口；WotLK 专属字段按 Turtle 1.12 能力返回 `0` 或全 0 table。
+
+已验证命令：
+
+```powershell
+cmake --build E:\GIT\WYTurtle\build_vs2022 --config Release --target mangosd -- /m
+```
+
+本轮新增 `WorldPacket` 后的轻量验证：
+
+```text
+WorldPacketMethods.h: ref=23 target=24 missing=0
+全部已扫描方法组 missing=0
+E:\TurtleBY\lua52_compiler.exe -p E:\GIT\WYTurtle\lua_scripts\example.lua
+```
+
+安装命令：
+
+```powershell
+cmake --build E:\GIT\WYTurtle\build_vs2022 --config Release --target INSTALL -- /m
+```
+
+## 配置项
+
+```ini
+Eluna.Enabled = 1
+Eluna.ScriptPath = "lua_scripts"
+```
+
+`Eluna.ScriptPath` 如果不是绝对路径，就按 `mangosd.exe` 的当前工作目录解析。
+
+## 全局函数
+
+当前 Lua 中可用：
+
+```lua
+RegisterPlayerEvent(eventId, function)
+RegisterServerEvent(eventId, function)
+RegisterCreatureEvent(entry, eventId, function)
+RegisterGameObjectEvent(entry, eventId, function)
+RegisterItemEvent(entry, eventId, function)
+RegisterSpellEvent(spellId, eventId, function)
+RegisterCreatureGossipEvent(entry, eventId, function)
+RegisterGameObjectGossipEvent(entry, eventId, function)
+RegisterItemGossipEvent(entry, eventId, function)
+ClearPlayerEvents([eventId])
+ClearServerEvents([eventId])
+ClearCreatureEvents(entry, [eventId])
+ClearGameObjectEvents(entry, [eventId])
+ClearItemEvents(entry, [eventId])
+ClearSpellEvents(spellId, [eventId])
+ClearCreatureGossipEvents(entry, [eventId])
+ClearGameObjectGossipEvents(entry, [eventId])
+ClearItemGossipEvents(entry, [eventId])
+CreateLuaEvent(function, delayMs, repeats)
+RemoveEventById(eventId)
+ReloadEluna()
+GetPlayerByName(name)
+GetPlayerByGUID(guidOrGuidLow)
+GetPlayerByGUIDLow(guidLow)
+CreateObjectGuid(high, counter)
+CreateObjectGuid(high, entry, counter)
+CreatePlayerGuid(counter)
+CreateItemGuid(counter)
+CreateCreatureGuid(entry, counter)
+CreateGameObjectGuid(entry, counter)
+CreatePacket(opcode, size)
+GetPlayerGUID(lowguid)
+GetItemGUID(lowguid)
+GetObjectGUID(lowguid, entry)
+GetUnitGUID(lowguid, entry)
+GetGUIDLow(guid)
+GetGUIDType(guid)
+GetGUIDEntry(guid)
+SendWorldMessage(message)
+GetGameTime()
+GetQuest(questId)
+GetItemTemplate(itemId)
+GetItemPrototype(itemId)
+GetCreatureTemplate(entry)
+GetCreatureInfo(entry)
+GetGameObjectTemplate(entry)
+GetGameObjectInfo(entry)
+GetGOTemplate(entry)
+GetGOInfo(entry)
+GetSpellInfo(spellId)
+GetSpellEntry(spellId)
+GetGuildById(guildId)
+GetGuildByName(name)
+GetPlayersInWorld()
+GetPlayerCount()
+GetMapById(mapId, instanceId)
+WorldDBQuery(sql)
+CharDBQuery(sql)
+CharacterDBQuery(sql)
+AuthDBQuery(sql)
+LoginDBQuery(sql)
+WorldDBExecute(sql)
+CharDBExecute(sql)
+CharacterDBExecute(sql)
+AuthDBExecute(sql)
+LoginDBExecute(sql)
+print(...)
+```
+
+说明：
+
+- `CreateLuaEvent(function, delayMs, repeats)` 返回定时器 ID。
+- `repeats = 0` 表示无限重复。
+- `GetPlayersInWorld()` 返回当前在线且在世界中的玩家对象数组。
+- `GetPlayerCount()` 返回当前在线且在世界中的玩家数量。
+- `GetMapById(mapId, instanceId)` 只查找已经加载的地图，找不到时返回 `nil`。
+- `GetPlayerByGUID()` 现在可以传 `ObjectGuid` 对象，也可以继续传玩家 `guidLow` 数字。
+- `GetPlayerByGUIDLow(guidLow)` 是按玩家低位 GUID 找在线玩家的兼容别名。
+- `CreateObjectGuid(high, counter)` 用于没有 entry 部分的 GUID，例如玩家和物品。
+- `CreateObjectGuid(high, entry, counter)` 用于有 entry 部分的 GUID，例如生物和 GameObject。
+- `CreatePacket(opcode, size)` 创建一个 Lua 持有的 `WorldPacket` 对象；`opcode` 必须小于 Turtle 1.12 的 `NUM_MSG_TYPES`，`size` 是预留字节大小。
+- `GetPlayerGUID(lowguid)`、`GetItemGUID(lowguid)`、`GetObjectGUID(lowguid, entry)`、`GetUnitGUID(lowguid, entry)` 是 3.3.5 Eluna 风格的 GUID 构造函数；注意 `GetObjectGUID` / `GetUnitGUID` 的参数顺序是低位 GUID 在前、entry 在后。
+- `GetGUIDLow(guid)`、`GetGUIDType(guid)`、`GetGUIDEntry(guid)` 用于从 `ObjectGuid` 里拆出低位、HighGuid 类型和 entry。
+- `GetItemTemplate(itemId)` / `GetItemPrototype(itemId)` 返回只读物品模板对象，找不到时返回 `nil`。
+- `GetCreatureTemplate(entry)` / `GetCreatureInfo(entry)` 返回只读生物模板对象，找不到时返回 `nil`。
+- `GetGameObjectTemplate(entry)` / `GetGameObjectInfo(entry)` / `GetGOTemplate(entry)` / `GetGOInfo(entry)` 返回只读 GameObject 模板对象，找不到时返回 `nil`。
+- 数据库查询函数返回二维 Lua table，行和列都从 `1` 开始。
+- 数据库执行函数返回 `true` 或 `false`。
+
+可用的 `HighGuid` 常量：
+
+```lua
+HIGHGUID_ITEM
+HIGHGUID_PLAYER
+HIGHGUID_GAMEOBJECT
+HIGHGUID_TRANSPORT
+HIGHGUID_UNIT
+HIGHGUID_PET
+HIGHGUID_DYNAMICOBJECT
+HIGHGUID_CORPSE
+HIGHGUID_MO_TRANSPORT
+```
+
+事件清理函数说明：
+
+- `ClearPlayerEvents()` 清理所有玩家事件；传入 `eventId` 时只清理指定玩家事件。
+- `ClearServerEvents()` 清理所有服务端事件；传入 `eventId` 时只清理指定服务端事件。
+- `ClearCreatureEvents(entry)` 清理该生物模板的所有 Creature 事件；传入 `eventId` 时只清理该模板的指定事件。
+- `ClearGameObjectEvents(entry)`、`ClearItemEvents(entry)` 逻辑相同，分别清理指定物体或物品模板事件。
+- `ClearSpellEvents(spellId)` 清理指定法术 ID 的动态施法事件；传入 `eventId` 时只清理指定事件。
+- `ClearCreatureGossipEvents(entry)`、`ClearGameObjectGossipEvents(entry)`、`ClearItemGossipEvents(entry)` 清理指定模板的 Gossip 事件。
+- 事件正在执行时调用清理函数是允许的；当前分发会跳过已经被清理的回调引用。
+
+## 已接入事件
+
+### 服务端事件
+
+```lua
+RegisterServerEvent(13, function(event, diff) end) -- 世界 Update
+RegisterServerEvent(14, function(event) end)       -- 服务端启动 / Lua 初始化后
+RegisterServerEvent(15, function(event) end)       -- 服务端关闭
+RegisterServerEvent(16, function(event) end)       -- Lua 状态关闭
+RegisterServerEvent(33, function(event) end)       -- Lua 状态打开
+```
+
+### 玩家事件
+
+```lua
+RegisterPlayerEvent(1, function(event, player) end)
+RegisterPlayerEvent(2, function(event, guidLow) end)
+RegisterPlayerEvent(3, function(event, player) end)
+RegisterPlayerEvent(4, function(event, player) end)
+RegisterPlayerEvent(5, function(event, player, spell, skipCheck) end)
+RegisterPlayerEvent(6, function(event, killer, killed) end)
+RegisterPlayerEvent(7, function(event, killer, killed) end)
+RegisterPlayerEvent(8, function(event, killer, killed) end)
+RegisterPlayerEvent(9, function(event, target, challenger) end)
+RegisterPlayerEvent(10, function(event, player1, player2) end)
+RegisterPlayerEvent(11, function(event, winner, loser, type) end)
+RegisterPlayerEvent(12, function(event, player, amount, victim, source) end)
+RegisterPlayerEvent(13, function(event, player, oldLevel) end)
+RegisterPlayerEvent(14, function(event, player, amount) end)
+RegisterPlayerEvent(15, function(event, player, factionId, standing, incremental) end)
+RegisterPlayerEvent(16, function(event, player, points) end)
+RegisterPlayerEvent(17, function(event, player, noCost) end)
+RegisterPlayerEvent(18, function(event, player, message, chatType, language) end)
+RegisterPlayerEvent(19, function(event, player, message, chatType, language, receiver) end)
+RegisterPlayerEvent(20, function(event, player, message, chatType, language, group) end)
+RegisterPlayerEvent(21, function(event, player, message, chatType, language, guild) end)
+RegisterPlayerEvent(22, function(event, player, message, chatType, language, channelName) end)
+RegisterPlayerEvent(23, function(event, player, emote) end)
+RegisterPlayerEvent(24, function(event, player, textEmote, emoteNum, guid) end)
+RegisterPlayerEvent(25, function(event, player) end)
+RegisterPlayerEvent(26, function(event, player, difficulty, mapId, permanent) end)
+RegisterPlayerEvent(27, function(event, player, newZone, newArea) end)
+RegisterPlayerEvent(28, function(event, player) end)
+RegisterPlayerEvent(29, function(event, player, item, bag, slot) end)
+RegisterPlayerEvent(30, function(event, player) end)
+RegisterPlayerEvent(31, function(event, player, itemEntry) end)
+RegisterPlayerEvent(32, function(event, player, item, count, guid) end)
+RegisterPlayerEvent(33, function(event, player, enemy) end)
+RegisterPlayerEvent(34, function(event, player) end)
+RegisterPlayerEvent(35, function(event, player) end)
+RegisterPlayerEvent(36, function(event, player) end)
+RegisterPlayerEvent(37, function(event, player, amount) end)
+RegisterPlayerEvent(38, function(event, player, questId) end)
+RegisterPlayerEvent(39, function(event, player, talentId, talentRank, spellId) end)
+RegisterPlayerEvent(42, function(event, player, command, chatHandler) end)
+RegisterPlayerEvent(43, function(event, player, pet) end)
+RegisterPlayerEvent(44, function(event, player, spellId) end)
+RegisterPlayerEvent(46, function(event, player, hasFfaPvp) end)
+RegisterPlayerEvent(47, function(event, player, oldArea, newArea) end)
+RegisterPlayerEvent(48, function(event, player, target) end)
+RegisterPlayerEvent(49, function(event, player, receiverGuid, mailboxGuid, subject, body, money, cod, item) end)
+RegisterPlayerEvent(51, function(event, player, item, count) end)
+RegisterPlayerEvent(52, function(event, player, item, count) end)
+RegisterPlayerEvent(53, function(event, player, item, count) end)
+RegisterPlayerEvent(54, function(event, player, quest) end)
+RegisterPlayerEvent(55, function(event, player, memberName) end)
+RegisterPlayerEvent(56, function(event, player, item, count, voteType, roll) end)
+RegisterPlayerEvent(57, function(event, player, type) end)
+RegisterPlayerEvent(58, function(event, player, killed) end)
+RegisterPlayerEvent(59, function(event, player) end)
+RegisterPlayerEvent(60, function(event, player, skillId) end)
+RegisterPlayerEvent(61, function(event, player, skillId, value, max, step) end)
+RegisterPlayerEvent(62, function(event, player, skillId, value, max, step, newValue) end)
+```
+
+玩家聊天事件返回值：
+
+```lua
+return false              -- 拦截聊天
+return "新的聊天内容"     -- 改写聊天内容
+```
+
+这个返回值规则当前适用于 `18` 普通聊天、`19` 密语、`20` 队伍/团队/战场小队聊天、
+`21` 公会/官员聊天、`22` 频道聊天。`23` 是动作表情事件，只通知脚本，不接收返回值。
+
+玩家事件说明：
+
+- `1` 角色创建成功后触发，参数是新建角色的 Player 对象。该角色此时已经保存到数据库，但还没有真正进入世界，脚本里不要做依赖地图可见对象的操作。
+- `2` 角色删除前触发，参数是被删除角色的 `guidLow`。这个事件保持 3.3.5 Eluna 的低位数字形式；需要对象时可用 `CreatePlayerGuid(guidLow)` 转成 `ObjectGuid`。
+- `3` 玩家登录。
+- `4` 玩家登出。
+- `5` 玩家施法，参数是玩家、`Spell` 对象和 `skipCheck`。这个事件会和按法术 ID 注册的 `RegisterSpellEvent(spellId, 2, ...)` 在同一次施法中分别触发。
+- `6` 玩家击杀玩家，参数是击杀者玩家和被击杀玩家。
+- `7` 玩家击杀 Creature，参数是击杀者玩家和被击杀 Creature；宠物、召唤物等归属击杀会尽量使用核心判定出的玩家归属。
+- `8` 玩家被 Creature 击杀，参数是击杀 Creature 和死亡玩家。玩家或玩家宠物造成的击杀不会走这个事件。
+- `9` 玩家发起决斗请求，参数是被挑战者和挑战者。
+- `10` 决斗正式开始，参数是挑战发起者和另一名玩家。
+- `11` 决斗结束，参数是核心判定的胜者、败者和结束类型。`DUEL_INTERRUPTED` 这类中断没有真正胜负，脚本应结合 `type` 判断。
+- `12` 玩家获得经验前触发，参数是经验值、受害者单位和来源。当前 Turtle 1.12 核心没有 3.3.5 的经验来源枚举，所以 `source` 暂时固定传 `0`。返回数字可以改写本次经验。
+- `13` 玩家等级变化，参数是玩家和旧等级；触发时玩家对象已经应用新等级。
+- `14` 玩家金币变化前触发，`amount` 是本次变化的铜币差值，正数为增加、负数为扣除。返回数字可以改写本次差值。不要在这个回调里再次调用 `SetMoney()` / `ModifyMoney()`，需要改钱时直接 `return 新差值`。
+- `15` 玩家声望变化前触发，参数是阵营 ID、变化值或目标 standing、是否增量。返回数字可以改写本次值；返回 `-1` 或 `false` 可以阻止本次声望变化。
+- `16` 玩家可用天赋点变化，参数是新的可用点数。
+- `17` 玩家重置天赋成功后触发，`noCost` 表示本次是否免金币消耗。
+- `18` 玩家普通聊天；当前支持拦截和改写消息。
+- `19` 玩家发送密语前触发，参数是发送者、消息、聊天类型、语言和接收者玩家对象。返回 `false` 可以阻止发送，返回字符串可以改写密语内容。
+- `20` 玩家发送队伍、团队、团队领袖、团队警告、战场、战场领袖聊天前触发，参数里最后一个是 `Group` 对象。返回 `false` 可以阻止发送，返回字符串可以改写消息。
+- `21` 玩家发送公会或官员聊天前触发，参数里最后一个是 `Guild` 对象。返回 `false` 可以阻止发送，返回字符串可以改写消息。
+- `22` 玩家发送频道聊天前触发，参数里最后一个当前是频道名字符串，例如 `"World"`。3.3.5 Eluna 这里通常传频道 ID 或频道对象；Turtle 适配层暂时还没有 `Channel` Lua 封装，所以先传可用的频道名。返回 `false` 可以阻止发送，返回字符串可以改写消息。
+- `23` 玩家发送动作表情包 `CMSG_EMOTE` 时触发，参数是核心 emote 数字。当前 Turtle 客户端路径只允许核心已经硬编码的 `EMOTE_ONESHOT_NONE` 和 `EMOTE_ONESHOT_WAVE` 进入这条事件；聊天框 `/me 文本` 仍走 `18` 普通聊天里的 `CHAT_MSG_EMOTE`，普通目标文字表情继续走 `24`。
+- `24` 玩家文字表情，`guid` 是目标对象的 `ObjectGuid` 对象。需要低位数字时用 `guid:GetGUIDLow()`。
+- `25` 玩家保存前触发。内部加了重入保护，避免 Lua 回调里调用 `player:SaveToDB()` 后无限递归。
+- `26` 玩家绑定到副本进度时触发，参数是 `difficulty`、mapId 和是否永久绑定。Turtle 1.12 没有 3.3.5 的副本难度系统，所以 `difficulty` 当前固定传 `0`。加载数据库已有绑定时不会触发，只有实际新绑定或更新绑定时触发。
+- `27` 玩家切换 Zone 时触发，参数是新 Zone 和新 Area。
+- `28` 玩家完成地图切换并加入新地图后触发。
+- `29` 玩家成功装备物品后触发，参数是物品对象、bag 和 slot。当前只在角色已经在世界中且本次装备需要客户端更新时触发，避免角色加载装备时误触发。
+- `30` 玩家首次登录角色时触发，挂在 `AT_LOGIN_FIRST` 首登标记处理路径里。触发后核心会移除这个首登标记，所以同一个角色正常只触发一次。
+- `31` 核心判断玩家是否可使用某个物品模板时触发，参数是 itemEntry。返回 `InventoryResult` 数字可以阻止使用；返回 `0` 或不返回表示允许继续。
+- `32` 玩家拾取物品后触发，参数是物品对象、本次数量和战利品来源对象 `guid`。需要低位数字时用 `guid:GetGUIDLow()`。
+- `33` 玩家进入战斗时触发，`enemy` 是触发本次进战的单位；某些核心辅助进战路径可能传 `nil`。
+- `34` 玩家离开战斗时触发。
+- `35` 玩家释放灵魂/回墓地时触发。Turtle 核心里的 `RepopAtGraveyard()` 有时也会被活着的玩家路径调用，当前 Lua 层只在调用前玩家处于死亡状态时触发。
+- `36` 玩家成功复活后触发。触发时玩家已经恢复为存活状态，生命/能量、鬼魂光环和可见性已经由核心处理。
+- `37` 玩家从拾取中获得金币后触发，`amount` 是这次拾取到的铜币数量。修改金币请继续用 `14` 金币变化事件。
+- `38` 玩家主动放弃任务后触发，参数是 questId。当前挂在 `CMSG_QUESTLOG_REMOVE_QUEST` 处理路径里，不会因为任务失败或核心内部移除任务而触发。
+- `39` 玩家学习天赋后触发，参数是天赋 ID、天赋 rank 和实际学习的 spellId。
+- `42` 玩家或控制台尝试执行命令时触发，参数是玩家对象或 `nil`、命令文本和 `chatHandler`。Turtle 适配层暂时还没有 `ChatHandler` Lua 封装，所以第三个对象参数当前固定为 `nil`。返回 `false` 可以拦截命令并阻止核心继续解析，适合做 Lua 自定义 GM 命令。
+- `43` 玩家宠物或玩家召唤物加入世界后触发，参数是玩家和宠物/召唤物 Creature 对象。当前覆盖 `Pet::AddToWorld()`，并补充覆盖玩家作为召唤者的临时召唤物加入世界。
+- `44` 玩家学习法术后触发，参数是 spellId。当前只在角色已经在世界中并且核心确认本次确实学到新法术时触发；学习天赋法术时通常会同时触发 `39` 和 `44`。
+- `46` 玩家 FFA PvP 状态变化后触发，`hasFfaPvp` 表示变化后的状态。
+- `47` 玩家切换 Area 时触发，参数是旧 Area 和新 Area。
+- `48` 玩家发起交易前触发，参数是发起者和目标玩家。返回 `false` 可以阻止本次交易。
+- `49` 玩家发送邮件前触发，参数是收件人 `ObjectGuid`、邮箱 `ObjectGuid`、标题、正文、铜币、COD 铜币和附件物品对象。返回 `false` 可以阻止本次邮件发送。
+- `51` 玩家获得任务奖励物品后触发，参数是物品对象和本次数量。它会和通用的 `52` / `53` 在同一次奖励里先后触发。
+- `52` 玩家创建新物品后触发，参数是物品对象和本次数量。当前覆盖 `StoreNewItem()` 和 `EquipNewItem()` 成功路径，不在角色加载背包时触发。
+- `53` 玩家把新物品放入背包后触发，参数是物品对象和本次数量。当前覆盖 `StoreNewItem()` 成功路径，不覆盖直接装备到装备栏的 `EquipNewItem()`。
+- `54` 玩家完成任务后触发，参数是 `Quest` 对象；触发点在核心把任务状态设为完成之后。
+- `55` 玩家发出组队邀请前触发，参数是邀请者玩家和被邀请角色名字符串。返回 `false` 可以阻止本次邀请；当前 Turtle 适配层先传角色名，不传被邀请者 Player 对象，以贴近 3.3.5 Eluna 的 `memberName` 参数。
+- `56` 队伍掷骰获胜并实际把物品放进背包后触发，参数是获胜玩家、物品对象、数量、voteType 和 roll。当前 `voteType` 使用核心 `ROLL_NEED` / `ROLL_GREED` 数值；`Roll` 对象封装还没有移植，所以最后一个参数暂时固定为 `nil`。
+- `57` 玩家因主动离开战场或竞技场而获得逃亡惩罚前触发，`type=0` 表示离开战场，`type=5` 表示离开竞技场。Turtle 目前先覆盖这个最常见路径，排队超时/拒绝进入等 3.3.5 细分类型后续再补。
+- `58` 玩家宠物、召唤物或被玩家控制的 Creature 击杀 Creature 时触发，参数是归属玩家和被击杀 Creature。这个事件不接收返回值；玩家本人直接击杀仍走 `7`。
+- `59` 玩家接受复活请求、核心真正复活前触发，参数是玩家。返回 `false` 可以阻止本次复活，并清理当前复活请求，避免请求残留。
+- `60` 玩家技能尝试增长前触发，参数是玩家和 skillId。返回 `false` 可以阻止本次技能增长尝试；覆盖普通技能增长和专业/采集/钓鱼这类概率增长路径。
+- `61` 玩家技能增长计算前触发，参数是当前技能值、上限和本次 step。返回数字可以改写参与计算的当前技能值；如果返回 `0` 或大于等于上限，本次增长会被核心自然跳过。
+- `62` 玩家技能实际增长成功后触发，参数是增长前参与计算的 value、max、step 和最终 newValue。概率增长未命中时不会触发。
+
+### Creature 事件
+
+```lua
+RegisterCreatureEvent(entry, 1, function(event, creature, target) end)
+RegisterCreatureEvent(entry, 2, function(event, creature) end)
+RegisterCreatureEvent(entry, 3, function(event, creature, victim) end)
+RegisterCreatureEvent(entry, 4, function(event, creature, killer) end)
+RegisterCreatureEvent(entry, 5, function(event, creature) end)
+RegisterCreatureEvent(entry, 6, function(event, creature, movementType, pointId) end)
+RegisterCreatureEvent(entry, 7, function(event, creature, diff) end)
+RegisterCreatureEvent(entry, 8, function(event, creature, player, emoteId) end)
+RegisterCreatureEvent(entry, 9, function(event, creature, attacker, damage) end)
+RegisterCreatureEvent(entry, 12, function(event, creature, target) end)
+RegisterCreatureEvent(entry, 13, function(event, creature, attacker) end)
+RegisterCreatureEvent(entry, 14, function(event, creature, caster, spellId) end)
+RegisterCreatureEvent(entry, 15, function(event, creature, target, spellId) end)
+RegisterCreatureEvent(entry, 19, function(event, creature, summon) end)
+RegisterCreatureEvent(entry, 20, function(event, creature, summon) end)
+RegisterCreatureEvent(entry, 23, function(event, creature) end)
+RegisterCreatureEvent(entry, 24, function(event, creature) end)
+RegisterCreatureEvent(entry, 26, function(event, creature, respawnDelay) end)
+RegisterCreatureEvent(entry, 27, function(event, creature, unit) end)
+RegisterCreatureEvent(entry, 30, function(event, caster, spellId, effIndex, creature) end)
+RegisterCreatureEvent(entry, 36, function(event, creature) end)
+RegisterCreatureEvent(entry, 37, function(event, creature) end)
+```
+
+对应：进战、脱战、击杀目标、死亡、重生、移动点到达、AI Update、接收玩家表情、受到伤害、主人攻击目标、主人被攻击、被法术命中、法术命中目标、成功召唤生物、召唤生物消失、重置、回到出生点、尸体移除、单位进入视野、DummyEffect、进入世界、移出世界。
+
+`7` 调用频率很高，不建议在这里做大量数据库查询。
+
+移动点到达事件 `6` 传入的是核心 `MovementInform(type, id)`，其中 `type` 可能是路径点、定点移动、追逐或跟随等移动类型；返回 `true` 可以跳过核心原本的 `AI()->MovementInform(type, id)` 回调。
+
+法术命中目标事件 `15` 在生物施法命中目标时触发；返回 `true` 可以跳过核心原本的 `AI()->SpellHitTarget(target, spellInfo)` 回调。
+
+成功召唤生物事件 `19` 在 `Creature` 作为召唤者召唤出 `Creature` 后触发；返回 `true` 可以跳过核心原本的 `AI()->JustSummoned(summon)` 回调。
+
+召唤生物消失事件 `20` 在临时召唤物或守护宠物通知召唤者消失时触发；返回 `true` 可以跳过核心原本的 `AI()->SummonedCreatureDespawn(summon)` 回调。
+
+单位进入视野事件 `27` 在核心准备调用 `AI()->MoveInLineOfSight(unit)` 前触发；返回 `true` 可以跳过核心原本的视野 AI。这个事件触发频率很高，不建议在里面做数据库查询或复杂循环。
+
+DummyEffect 事件 `30` 由核心的 `ScriptMgr::OnEffectDummy` 生物目标入口触发；返回 `false` 会继续交给原核心脚本处理。
+
+生命周期事件 `36` / `37` 在生物加入世界和从世界移除时触发。此时对象仍可被 Lua 读取，但不建议在 `37` 里再次强制删除或传送同一个生物。
+
+伤害事件可以修改伤害：
+
+```lua
+RegisterCreatureEvent(12345, 9, function(event, creature, attacker, damage)
+    return damage / 2
+end)
+```
+
+也可以返回两个值，第一个 `true` 表示停止核心后续伤害处理，第二个数字表示新伤害：
+
+```lua
+return true, 0
+```
+
+主人攻击目标事件 `12` 和主人被攻击事件 `13` 主要用于宠物、守护者、临时召唤物这类有主人的生物；返回 `true` 可以跳过核心原本的 `OwnerAttacked` / `OwnerAttackedBy` AI 回调。
+
+尸体移除事件可以修改本次重生延迟，单位是秒：
+
+```lua
+RegisterCreatureEvent(12345, 26, function(event, creature, respawnDelay)
+    return 60
+end)
+```
+
+也可以返回两个值，第一个 `true` 表示跳过核心原本的 `AI()->CorpseRemoved` 回调，第二个数字表示新重生延迟：
+
+```lua
+return true, 60
+```
+
+重置事件 `23` 会在死亡、脱战重置、重生时触发。回家事件 `24` 会在生物完成回到出生点动作后触发；如果返回 `true`，会跳过核心原本的 `AI()->JustReachedHome()` 回调。
+
+### Quest 事件
+
+任务事件现在传的是 `Quest` 对象，不再是旧文档里的 `questId` 数字。
+
+```lua
+RegisterCreatureEvent(entry, 31, function(event, player, creature, quest) end)
+RegisterCreatureEvent(entry, 34, function(event, player, creature, quest) end)
+RegisterGameObjectEvent(entry, 4, function(event, player, gameobject, quest) end)
+RegisterGameObjectEvent(entry, 5, function(event, player, gameobject, quest) end)
+RegisterItemEvent(entry, 3, function(event, player, item, quest) end)
+```
+
+示例：
+
+```lua
+RegisterCreatureEvent(12345, 31, function(event, player, creature, quest)
+    player:SendBroadcastMessage("接到任务：" .. quest:GetTitle())
+end)
+```
+
+### Spell 事件
+
+这部分监听的是一次正在释放中的动态 `Spell` 对象，不是 `GetSpellInfo()` 返回的只读 DBC 模板。
+
+```lua
+RegisterSpellEvent(spellId, 1, function(event, caster, spell) end)
+RegisterSpellEvent(spellId, 2, function(event, caster, spell, skipCheck) end)
+RegisterSpellEvent(spellId, 3, function(event, caster, spell, bySelf) end)
+```
+
+事件含义：
+
+- `1` 在核心完成施法检查、计算消耗/读条时间/持续时间后，正式发送施法前触发。
+- `2` 在核心进入 `Spell::cast()` 并刷新目标指针后触发。
+- `3` 在核心取消施法时触发。
+- 当前返回值不会改变核心施法流程；如需中断施法，可以在回调里调用 `spell:Cancel()`。
+
+### Gossip 和使用事件
+
+```lua
+RegisterCreatureGossipEvent(entry, 1, function(event, player, creature) end)
+RegisterCreatureGossipEvent(entry, 2, function(event, player, creature, sender, action, code) end)
+RegisterGameObjectGossipEvent(entry, 1, function(event, player, gameobject) end)
+RegisterGameObjectGossipEvent(entry, 2, function(event, player, gameobject, sender, action, code) end)
+RegisterItemGossipEvent(entry, 1, function(event, player, item) end)
+RegisterItemGossipEvent(entry, 2, function(event, player, item, sender, action, code) end)
+RegisterGameObjectEvent(entry, 1, function(event, gameobject, diff) end)
+RegisterGameObjectEvent(entry, 2, function(event, gameobject) end)
+RegisterGameObjectEvent(entry, 3, function(event, caster, spellId, effIndex, gameobject) end)
+RegisterGameObjectEvent(entry, 9, function(event, gameobject, lootState) end)
+RegisterGameObjectEvent(entry, 10, function(event, gameobject, goState) end)
+RegisterGameObjectEvent(entry, 12, function(event, gameobject) end)
+RegisterGameObjectEvent(entry, 13, function(event, gameobject) end)
+RegisterGameObjectEvent(entry, 14, function(event, gameobject, player) end)
+RegisterItemEvent(entry, 1, function(event, caster, spellId, effIndex, item) end)
+RegisterItemEvent(entry, 2, function(event, player, item, target) end)
+RegisterItemEvent(entry, 4, function(event, player, itemId) end)
+RegisterItemEvent(entry, 5, function(event, player, item) end)
+```
+
+`Item` 使用事件里的 `target` 现在是 `SpellCastTargets` 对象，只保证在当前回调执行期间有效。
+默认会继续释放物品自带法术；如果 Lua 明确 `return false`，会阻止这次物品法术释放。
+
+Item 事件：
+
+- `1` 由核心 `ScriptMgr::OnEffectDummy` 的 Item 目标入口触发，参数为施法者、法术 ID、效果下标、目标物品。
+- `2` 在右键使用物品时触发，`target` 是 `SpellCastTargets` 对象。
+- `4` 在限时物品即将到期并被核心删除前触发；返回 `true` 可以阻止本次到期删除。
+- `5` 在 `Player::DestroyItem` 实际删除物品前触发；返回 `true` 可以阻止本次删除。
+- 到期和删除事件属于危险入口，不建议在回调里再次删除同一个物品，除非脚本明确 `return true` 接管后续流程。
+
+Item Gossip：
+
+- `RegisterItemGossipEvent(entry, 1, ...)` 会在玩家右键使用该物品时触发。
+- 回调里可以用 `player:GossipClearMenu()`、`player:GossipMenuAddItem(...)`、`player:GossipSendMenu(textId, item)` 打开物品菜单。
+- 物品菜单被点击后，会进入 `RegisterItemGossipEvent(entry, 2, ...)`，参数为 `event, player, item, sender, action, code`。
+- 如果同一个物品也有使用法术，默认仍会继续释放物品法术；在物品 Gossip Hello 里明确 `return false` 可以阻止这次物品法术释放。
+
+GameObject 状态事件：
+
+- `1` 在 GameObject 更新时触发，参数 `diff` 是本次更新间隔毫秒数。这个事件触发频率很高，不建议在里面做数据库查询或复杂循环。
+- `2` 在默认刷新物体的重生计时到期、核心把 GameObject 重新加入地图后触发；初始地图加载或临时召唤进入世界使用 `12`。
+- `3` 由核心的 `ScriptMgr::OnEffectDummy` GameObject 目标入口触发；返回 `false` 会继续交给原核心脚本处理。
+- `9` 在已经进入世界的 GameObject 的 `LootState` 改变时触发。
+- `10` 在已经进入世界的 GameObject 的 `GOState` 改变时触发。
+- `12` / `13` 在 GameObject 加入世界和从世界移除时触发。
+- 初始化阶段的状态设置不会触发 Lua，避免地图加载时误执行脚本。
+
+## WorldPacket 方法
+
+`WorldPacket` 是服务端和客户端之间的底层网络包对象。当前已经完成基础对象封装，可以由 `CreatePacket(opcode, size)` 创建，并通过 `Player`、`Group`、`Guild`、`WorldObject` 的 `SendPacket(packet)` 发送。
+
+可用方法：
+
+```lua
+packet:GetOpcode()
+packet:GetSize()
+packet:SetOpcode(opcode)
+packet:ReadByte()
+packet:ReadUByte()
+packet:ReadShort()
+packet:ReadUShort()
+packet:ReadLong()
+packet:ReadULong()
+packet:ReadFloat()
+packet:ReadDouble()
+packet:ReadGUID()
+packet:ReadGuid()
+packet:ReadString()
+packet:WriteGUID(guidOrObjectOrPlayerLowGuid)
+packet:WriteGuid(guidOrObjectOrPlayerLowGuid)
+packet:WriteString(value)
+packet:WriteByte(value)
+packet:WriteUByte(value)
+packet:WriteShort(value)
+packet:WriteUShort(value)
+packet:WriteLong(value)
+packet:WriteULong(value)
+packet:WriteFloat(value)
+packet:WriteDouble(value)
+```
+
+说明：
+
+- `ReadGUID()` 返回 `ObjectGuid` 对象；`WriteGUID()` 可以接收 `ObjectGuid`、世界对象，或玩家低位 GUID 数字。
+- 读包越界会抛出 Lua 错误 `packet read out of range`，避免 C++ 的 `ByteBufferException` 直接穿出。
+- 这是底层包接口，脚本必须按 1.12 客户端 opcode 的字段顺序写入；opcode 或字段写错可能导致客户端断开、界面异常或客户端崩溃。
+- 当前已支持 Lua 主动创建并发送包；客户端入包事件拦截和把现有收包包装成 Lua `WorldPacket` 的流程还没有移植。
+
+## ObjectGuid 方法
+
+`ObjectGuid` 是 GUID 值对象，不是世界里的实体指针，可以安全保存低位、类型和字符串信息。
+对象本身不代表目标一定还在世界里；需要实体对象时仍应通过玩家、生物、物品、地图等接口重新查找。
+
+获取方式：
+
+```lua
+local guid = player:GetGUID()
+local playerGuid = CreatePlayerGuid(guidLow)
+local itemGuid = CreateItemGuid(itemGuidLow)
+local creatureGuid = CreateCreatureGuid(entry, counter)
+local goGuid = CreateGameObjectGuid(entry, counter)
+local elunaStyleCreatureGuid = GetUnitGUID(lowguid, entry)
+local low = GetGUIDLow(guid)
+local high = GetGUIDType(guid)
+local entry = GetGUIDEntry(guid)
+```
+
+可用方法：
+
+```lua
+guid:GetCounter()
+guid:GetGUIDLow()
+guid:GetEntry()
+guid:GetHigh()
+guid:GetHighGuid()
+guid:GetTypeId()
+guid:GetTypeID()
+guid:GetMaxCounter()
+guid:GetTypeName()
+guid:GetString()
+guid:ToString()
+guid:GetRawValue()        -- 返回十进制字符串，避免 Lua number 精度丢失
+guid:GetRawValueString()
+guid:IsEmpty()
+guid:IsPlayer()
+guid:IsCreature()
+guid:IsPet()
+guid:IsCreatureOrPet()
+guid:IsUnit()
+guid:IsItem()
+guid:IsGameObject()
+guid:IsDynamicObject()
+guid:IsCorpse()
+guid:IsTransport()
+guid:IsMOTransport()
+guid:Equals(otherGuid)
+```
+
+`tostring(guid)` 等同于 `guid:ToString()`，两个 `ObjectGuid` 也可以用 `==` 比较。
+
+## 通用对象方法
+
+`Player`、`Creature`、`GameObject`、`Item` 支持：
+
+```lua
+obj:GetEntry()
+obj:GetGUID()
+obj:GetGuid()
+obj:GetObjectGuid()
+obj:GetGUIDLow()
+obj:GetTypeId()
+obj:GetTypeID()
+obj:IsPlayer()
+obj:IsCreature()
+obj:IsUnit()
+obj:IsGameObject()
+obj:IsItem()
+obj:IsWorldObject()
+obj:GetScale()
+obj:SetScale(scale)
+obj:IsInWorld()
+obj:GetUInt32Value(index)
+obj:GetInt32Value(index)
+obj:GetFloatValue(index)
+obj:GetByteValue(index, offset)
+obj:GetUInt16Value(index, offset)
+obj:GetUInt64Value(index)
+obj:SetUInt32Value(index, value)
+obj:SetInt32Value(index, value)
+obj:UpdateUInt32Value(index, value)
+obj:SetFloatValue(index, value)
+obj:SetByteValue(index, offset, value)
+obj:SetUInt16Value(index, offset, value)
+obj:SetInt16Value(index, offset, value)
+obj:SetUInt64Value(index, value)
+obj:HasFlag(index, flag)
+obj:SetFlag(index, flag)
+obj:RemoveFlag(index, flag)
+obj:ToPlayer()
+obj:ToCreature()
+obj:ToUnit()
+obj:ToGameObject()
+obj:ToCorpse()
+```
+
+`Player`、`Creature`、`GameObject` 支持：
+
+```lua
+obj:GetMapId()
+obj:GetMapID()
+obj:GetMap()
+obj:GetPhaseMask()
+obj:SetPhaseMask(phaseMask, update)
+obj:GetInstanceId()
+obj:GetInstanceID()
+obj:GetZoneId()
+obj:GetZoneID()
+obj:GetAreaId()
+obj:GetAreaID()
+obj:GetX()
+obj:GetY()
+obj:GetZ()
+obj:GetO()
+obj:GetLocation()
+obj:GetDistance(other)
+obj:GetDistance(x, y, z)
+obj:GetDistance2d(other)
+obj:GetDistance2d(x, y)
+obj:GetExactDistance(other)
+obj:GetExactDistance(x, y, z)
+obj:GetExactDistance2d(other)
+obj:GetExactDistance2d(x, y)
+obj:GetRelativePoint(distance, angle)
+obj:GetAngle(other)
+obj:GetAngle(x, y)
+obj:IsWithinDist(other, distance, is3D)
+obj:IsWithinDist3d(x, y, z, distance)
+obj:IsWithinDist2d(x, y, distance)
+obj:IsWithinDistInMap(other, distance, is3D)
+obj:IsInMap(other)
+obj:IsInRange(other, minRange, maxRange, is3D)
+obj:IsInRange2d(x, y, minRange, maxRange)
+obj:IsInRange3d(x, y, z, minRange, maxRange)
+obj:IsInFront(other, arc)
+obj:IsInBack(other, arc)
+obj:IsWithinLOS(other)
+obj:IsFriendlyTo(other)
+obj:IsHostileTo(other)
+obj:GetPlayersInRange(range, hostile, dead)
+obj:GetCreaturesInRange(range, entry, hostile, dead)
+obj:GetGameObjectsInRange(range, entry, hostile)
+obj:GetNearestPlayer(range, hostile, dead)
+obj:GetNearestCreature(range, entry, hostile, dead)
+obj:GetNearestGameObject(range, entry, hostile)
+obj:GetNearObject(range, typeMask, entry, hostile, dead)
+obj:GetNearObjects(range, typeMask, entry, hostile, dead)
+obj:FindNearestPlayer(range)
+obj:FindNearestCreature(entry, range, alive)
+obj:FindNearestGameObject(entry, range)
+obj:SummonCreature(entry, x, y, z, o, summonType, despawnTime)
+obj:SpawnCreature(entry, x, y, z, o, summonType, despawnTime)
+obj:SummonGameObject(entry, x, y, z, o, respawnTime)
+obj:PlayMusic(musicId, player)
+obj:PlayDirectSound(soundId, player)
+obj:PlayDistanceSound(soundId, player)
+obj:RegisterEvent(function, delayMs, repeats)
+obj:RemoveEventById(eventId)
+obj:RemoveEvents()
+obj:SendPacket(packet)
+```
+
+查找不到对象时，现在会正确返回 `nil`。
+`ToPlayer()`、`ToCreature()`、`ToUnit()`、`ToGameObject()`、`ToCorpse()` 会按真实对象类型转换，转换失败时返回 `nil`。
+`Get*Value` / `Set*Value` 是底层 UpdateField 读写接口，index 和 offset 必须按 Turtle 1.12 的 `UpdateFields.h` 使用，写错可能直接改坏对象状态。
+`GetPhaseMask` / `SetPhaseMask` 在 Turtle 1.12 中映射到核心的 `WorldMask`；`SetPhaseMask` 的 `update` 参数保留为 Eluna 兼容参数，但当前 Turtle 核心没有 3.3.5 那种同名可见性刷新接口。
+`GetNearestCreature` / `GetNearestGameObject` 使用 Eluna 参数顺序，旧的 `FindNearestCreature(entry, range, alive)` 和 `FindNearestGameObject(entry, range)` 仍然保留。
+`GetNearObject` / `GetNearObjects` 当前枚举已加载的 `Player`、`Creature`、`GameObject`；`Corpse` 对象已可由玩家、地图和 `ToCorpse()` 等路径取得。
+`hostile` 参数约定为 `0` 不过滤、`1` 敌对、`2` 友方；`dead` 参数约定为 `0` 不过滤、`1` 存活、`2` 死亡。
+`RegisterEvent` / `RemoveEventById` / `RemoveEvents` 已作为对象方法名接入，但对象绑定事件队列还没有真正移植；`RegisterEvent` 当前返回 `nil`，删除函数为空操作。`SendPacket` 现在可以发送由 `CreatePacket()` 创建的 `WorldPacket`。
+
+## Player 方法
+
+常用方法：
+
+```lua
+player:GetName()
+player:GetAccountId()
+player:GetLevel()
+player:SetLevel(level)
+player:IsAlive()
+player:GetHealth()
+player:GetMaxHealth()
+player:GetHealthPct()
+player:GetHealthPercent()
+player:IsFullHealth()
+player:HealthAbovePct(pct)
+player:HealthBelowPct(pct)
+player:CountPctFromCurHealth(pct)
+player:CountPctFromMaxHealth(pct)
+player:SetHealth(value)
+player:SetMaxHealth(value)
+player:GetPower(powerType)
+player:GetMaxPower(powerType)
+player:SetPower(powerType, value)
+player:SetMaxPower(powerType, value)
+player:ModifyPower(amount, powerType)
+player:GetPowerType()
+player:SetPowerType(powerType)
+player:GetPowerPct(powerType)
+player:GetRace()
+player:GetClass()
+player:GetRaceMask()
+player:GetClassMask()
+player:GetRaceAsString(locale)
+player:GetClassAsString(locale)
+player:GetCreatureType()
+player:GetStat(stat)
+player:HandleStatModifier(stat, modifierType, value, apply)
+player:GetBaseSpellPower(spellSchool)
+player:GetGender()
+player:IsDead()
+player:IsDying()
+player:IsMounted()
+player:IsOnVehicle()
+player:GetVehicle()
+player:GetVehicleKit()
+player:IsRooted()
+player:IsFeared()
+player:IsConfused()
+player:IsPolymorphed()
+player:IsStopped()
+player:IsTaxiFlying()
+player:IsCharmed()
+player:IsAttackingPlayer()
+player:GetStandState()
+player:SetStandState(state)
+player:GetUnitState()
+player:HasUnitState(stateFlags)
+player:AddUnitState(stateFlags)
+player:ClearUnitState(stateFlags)
+player:GetSpeed(moveType)
+player:GetSpeedRate(moveType)
+player:SetSpeed(moveType, speed)
+player:SetSpeedRate(moveType, rate)
+player:GetMovementType()
+player:MoveStop()
+player:MoveExpire(reset)
+player:MoveClear(reset, all)
+player:MoveIdle()
+player:MoveRandom(radius, expireTime)
+player:MoveHome()
+player:MoveFollow(target, dist, angle)
+player:MoveChase(target, dist, angle)
+player:MoveConfused()
+player:MoveFleeing(target, time)
+player:MoveTo(id, x, y, z, genPath)
+player:MoveJump(x, y, z, horizontalSpeed, maxHeight, id)
+player:NearTeleport(x, y, z, orientation)
+player:GetAttackers()
+player:GetThreatList()
+player:GetThreat(victim)
+player:AddThreat(victim, threat, schoolMask, spellId)
+player:ModifyThreatPct(victim, percent)
+player:ModifyThreatPercent(victim, percent)
+player:ClearThreat(victim)
+player:ResetAllThreat()
+player:ClearThreatList()
+player:GetFriendlyUnitsInRange(range)
+player:GetUnfriendlyUnitsInRange(range)
+player:HasAura(spellId)
+player:GetAura(spellId, effectIndex)
+player:AddAura(spellId, caster)
+player:RemoveAura(spellId)
+player:RemoveAllAuras()
+player:RemoveArenaAuras(onleave)
+player:GetVictim()
+player:GetSelection()
+player:GetSelectedUnit()
+player:GetSelectedPlayer()
+player:GetSelectedCreature()
+player:GetSelectedGameObject()
+player:GetSelectedGO()
+player:GetSelectedObject()
+player:GetSelectedWorldObject()
+player:GetSelectionGUID()
+player:GetSelectedGUID()
+player:GetSelectedGameObjectGUID()
+player:GetSelectedGOGUID()
+player:Attack(target, melee)
+player:AttackStop()
+player:Kill(target)
+player:DealDamage(target, damage, durabilityLoss, school, spellId)
+player:DealHeal(target, spellId, amount, critical)
+player:IsInCombat()
+player:ClearInCombat()
+player:SetInCombatWith(enemy)
+player:SetOwnerGUID(guid)
+player:SetCreatorGUID(guid)
+player:SetPetGUID(guid)
+player:SetCritterGUID(guid)
+player:SetName(name)
+player:SetImmuneTo(mechanic, apply)
+player:IsUnderWater()
+player:IsUnderwater()
+player:IsCasting()
+player:IsPvPFlagged()
+player:IsStandState()
+player:IsVendor()
+player:IsTrainer()
+player:IsQuestGiver()
+player:IsGossip()
+player:IsTaxi()
+player:IsGuildMaster()
+player:IsBattleMaster()
+player:IsBanker()
+player:IsInnkeeper()
+player:IsSpiritHealer()
+player:IsSpiritGuide()
+player:IsTabardDesigner()
+player:IsAuctioneer()
+player:IsArmorer()
+player:IsServiceProvider()
+player:IsSpiritService()
+player:CastSpell(target, spellId, triggered)
+player:CastCustomSpell(target, spellId, triggered, bp0, bp1, bp2, castItem, originalCaster, addThreat)
+player:CastSpellAoF(x, y, z, spellId, triggered)
+player:SendUnitSay(message, language)
+player:SendUnitYell(message, language)
+player:SendUnitWhisper(message, language, receiver, bossWhisper)
+player:SendUnitEmote(message, receiver, bossEmote)
+player:SendChatMessageToPlayer(chatType, language, message, receiver)
+player:GetDisplayId()
+player:SetDisplayId(displayId)
+player:GetNativeDisplayId()
+player:SetNativeDisplayId(displayId)
+player:RestoreDisplayId()
+player:DeMorph()
+player:GetMountId()
+player:Mount(displayId)
+player:Dismount()
+player:GetFaction()
+player:SetFaction(factionId)
+player:RestoreFaction()
+player:SetSheath(sheathState)
+player:SetRooted(apply)
+player:SetConfused(apply)
+player:SetFeared(apply)
+player:SetFacing(orientation)
+player:SetFacingToObject(target)
+player:SetPvP(apply)
+player:SetFFA(apply)
+player:SetSanctuary(apply)
+player:SetWaterWalk(enable)
+player:StopSpellCast(spellId)
+player:GetCurrentSpell(spellType)
+player:InterruptSpell(spellType, delayed)
+player:PerformEmote(emoteId)
+player:EmoteState(emoteId)
+player:GetOwner()
+player:GetOwnerGUID()
+player:GetCreatorGUID()
+player:GetMinionGUID()
+player:GetPetGUID()
+player:GetCritterGUID()
+player:GetControllerGUID()
+player:GetControllerGUIDS()
+player:GetCharmer()
+player:GetCharmerGUID()
+player:GetCharm()
+player:GetCharmGUID()
+player:GetCharmerOrOwner()
+player:GetCharmerOrOwnerGUID()
+```
+
+移动速度参数 `moveType` 使用 Turtle/MaNGOS 的移动类型：`0` 走路，`1` 跑步，`2` 后退跑，`3` 游泳，`4` 后退游泳，`5` 转向速率。
+`SetPower` / `SetMaxPower` 支持 `unit:SetPower(powerType, value)`，也兼容只传 `value` 时使用单位当前能量类型；`ModifyPower(amount, powerType)` 的 `powerType` 可省略。
+`SetPowerType(powerType)` 会直接切换单位当前能量类型；真实脚本中要确认当前单位支持该能量类型。
+`GetRaceAsString(locale)` / `GetClassAsString(locale)` 从 DBC 里读取名称，`locale` 可省略，当前 Turtle 1.12 只支持 `0..7` 的 DBC 语言下标。
+`GetBaseSpellPower(spellSchool)` 目前只对玩家返回 `PLAYER_FIELD_MOD_DAMAGE_DONE_POS` 的数值，Creature 调用返回 `0`。
+`SetSpeed(moveType, speed)` 用 Turtle 的基础速度换算成速度倍率后调用核心 `SetSpeedRate`；`SetSpeedRate(moveType, rate)` 直接设置倍率。
+移动控制接口直接调用 Turtle/MaNGOS 的 `MotionMaster`。`MoveTo(id, x, y, z, genPath)` 的 `genPath` 默认 `true`；`MoveJump` 在 1.12 核心里使用水平速度和最大高度，不是 3.3.5 的完整移动参数集。
+`CastSpell(target, spellId, triggered)` 支持 `target` 传 `nil`，当前适配层额外返回 `true/false` 表示核心是否接受施法；旧脚本忽略返回值即可。
+`CastCustomSpell` 的 `bp0/bp1/bp2` 传 `nil` 表示不覆盖该效果基础点数，`originalCaster` 需要传本适配层的 `ObjectGuid` 对象。
+`CastSpellAoF` 是区域坐标施法，`triggered` 默认 `true`；`NearTeleport` 只在当前地图内近距离传送，返回是否成功。
+`SendUnitSay` / `SendUnitYell` 对 Player 使用玩家聊天，对 Creature 使用怪物聊天；`SendUnitWhisper` 在 Turtle 1.12 中走怪物私语包，`language` 参数只做兼容占位。
+`SendChatMessageToPlayer(chatType, language, message, receiver)` 直接组装聊天包发给指定玩家，`chatType` 使用核心 `ChatMsg` 数值。
+`SetOwnerGUID`、`SetCreatorGUID`、`SetPetGUID` 接收本适配层 `ObjectGuid` 对象；`SetCritterGUID` 在 Turtle 1.12 没有对应核心字段，当前只是兼容入口，不改变实际状态。
+`SetName(name)` 当前只会修改 Player 内存名，Creature 没有安全的运行时改名入口；不建议用于正式改名流程。
+`SetImmuneTo(mechanic, apply)` 映射到核心 `IMMUNITY_MECHANIC`；`SetSanctuary(apply)` 会修改 1.12 对应字节标记，Player 还会同步 `PLAYER_FLAGS_SANCTUARY`。
+`SetWaterWalk(enable)`、`SetFFA(apply)`、`SetInCombatWith(enemy)` 都会直接改变单位状态，建议只在明确的事件流程里使用。
+`InterruptSpell(spellType, delayed)` 使用 Eluna 外部参数：`0` 近战、`1` 通用、`2` 引导、`3` 自动射击。
+`GetStat(stat)` 的 `stat` 是 `0..4`，对应力量、敏捷、耐力、智力、精神。
+`HandleStatModifier(stat, modifierType, value, apply)` 同样只支持 `stat` 为 `0..4`，会直接套用或移除对应属性修正；`modifierType` 使用 Turtle/MaNGOS 的 `UnitModifierType`。
+`GetFriendlyUnitsInRange(range)` / `GetUnfriendlyUnitsInRange(range)` 返回当前地图内附近 Player/Creature 单位数组，按核心的友方/敌方、存活、可见和距离检查过滤，并排除自己。
+`GetCurrentSpell(spellType)` 返回当前正在释放的动态 `Spell` 对象，找不到时返回 `nil`。这个对象只在当前核心状态有效，不要保存到全局变量或定时器里长期使用。
+`IsInAccessiblePlaceFor(creature)` 需要第二个参数是 Creature 对象，用于检查当前单位是否处在该 Creature 可到达的位置。
+Turtle 1.12 没有真实 Vehicle 系统，所以 `IsOnVehicle()` 固定返回 `false`，`GetVehicle()` / `GetVehicleKit()` 固定返回 `nil`，仅作为 3.3.5 脚本兼容入口。
+`GetAura(spellId, effectIndex)` 返回 `Aura` 对象，找不到时返回 `nil`；`effectIndex` 使用核心下标 `0..2`，不传时默认 `0`。
+`AddAura(spellId, caster)` 当前沿用本适配层已有参数顺序：给当前单位添加光环，第三个参数是可选施法者；返回值已经从布尔值升级为 `Aura` 对象，失败时返回 `nil`。
+`RemoveAllAuras()` 会移除单位身上的全部光环，天赋、种族、被动光环也可能受影响，脚本里要谨慎使用。
+`RemoveArenaAuras(onleave)` 会清理竞技场相关光环，`onleave` 默认 `false`。它会改变角色状态，不要在普通查询命令里随手调用。
+`DealDamage` / `DealHeal` 会产生真实战斗效果，包含伤害、治疗、吸收/抗性、战斗日志等核心路径；建议只在明确的战斗事件或技能逻辑里使用。
+仇恨接口主要给 Creature 使用；Player 也挂了同名方法用于兼容旧脚本，但玩家通常没有仇恨列表，所以多数调用会返回 `nil`、`0` 或没有实际效果。
+`GetThreatList()` 返回当前仇恨列表里的单位数组；没有仇恨列表或单位不在地图中时返回 `nil`。`GetThreat(victim)` 返回对指定目标的仇恨值。
+`AddThreat(victim, threat, schoolMask, spellId)` 的 `schoolMask` 和 `spellId` 可省略；为了兼容已有脚本，也接受旧顺序 `AddThreat(victim, threat, spellId, schoolMask)`。
+`ClearThreat(victim)` 和 `ResetAllThreat()` 在 Turtle 1.12 里通过把目标仇恨降低 100% 来适配，不是 3.3.5 Eluna 的原生实现；`ClearThreatList()` 会直接清空整个仇恨列表，战斗脚本里要谨慎使用。
+这一组 Unit GUID 方法当前沿用本适配层已有 `GetOwnerGUID` 等方法的行为，返回低位 counter 数字；`GetCritterGUID()` 在 Turtle 1.12 核心没有对应字段，当前返回 `0`。
+这部分 `Unit` 方法同样适用于 `Creature`。
+
+选中目标说明：
+
+- `player:GetSelection()` 是 3.3.5 Eluna 风格别名，等同于 `player:GetSelectedUnit()`，返回当前选中的 `Player` 或 `Creature`，没有单位目标时返回 `nil`。
+- `player:GetSelectedPlayer()`、`player:GetSelectedCreature()` 会按类型返回对象，类型不匹配时返回 `nil`。
+- `player:GetSelectedGameObject()` / `player:GetSelectedGO()` 读取当前选中的 GameObject。
+- `player:GetSelectedObject()` / `player:GetSelectedWorldObject()` 会优先返回选中单位，没有单位时再返回选中 GameObject。
+- `player:GetSelectionGUID()` / `player:GetSelectedGUID()` 返回当前选中单位的 `ObjectGuid`；`player:GetSelectedGameObjectGUID()` / `player:GetSelectedGOGUID()` 返回选中 GameObject 的 `ObjectGuid`。
+
+玩家专属：
+
+```lua
+player:SendBroadcastMessage(message)
+player:SendSysMessage(message)
+player:SendNotification(message)
+player:SendAreaTriggerMessage(message)
+player:SendAreaTrigger(message)
+player:SendAddonMessage(prefix, message)
+player:SendAddonMessage(prefix, message, receiver)
+player:SendAddonMessage(prefix, message, channel, receiver)
+player:SendCinematicStart(cinematicId)
+player:SendUpdateWorldState(field, value)
+player:Say(message, language)
+player:Yell(message, language)
+player:TextEmote(message)
+player:GetMoney()
+player:SetMoney(value)
+player:ModifyMoney(amount)
+player:GetXP()
+player:SetXP(value)
+player:GiveXP(value, victim)
+player:IsHorde()
+player:IsAlliance()
+player:GetTeam()
+player:GetTeamId()
+player:GetGuildId()
+player:GetGuildRank()
+player:IsInGroup()
+player:IsInGuild()
+player:GetGroup()
+player:GetOriginalGroup()
+player:GetGroupInvite()
+player:GetSubGroup()
+player:GetOriginalSubGroup()
+player:GetGuild()
+player:GetGuildName()
+player:GetTrader()
+player:HasSkill(skillId)
+player:GetSkillValue(skillId)
+player:GetBaseSkillValue(skillId)
+player:GetPureSkillValue(skillId)
+player:GetMaxSkillValue(skillId)
+player:GetPureMaxSkillValue(skillId)
+player:GetSkillTempBonusValue(skillId)
+player:GetSkillPermBonusValue(skillId)
+player:SetSkill(skillId, step, current, max)
+player:AdvanceSkillsToMax()
+player:AdvanceSkill(skillId, step)
+player:AdvanceAllSkills(step)
+player:GetReputation(factionId)
+player:GetReputationRank(factionId)
+player:SetReputation(factionId, value)
+player:GetTotalPlayedTime()
+player:GetLevelPlayedTime()
+player:IsInWater()
+player:IsMoving()
+player:IsFlying()
+player:CanFly()
+player:IsFalling()
+player:IsDND()
+player:IsAFK()
+player:CanSpeak()
+player:ToggleAFK()
+player:ToggleDND()
+player:IsGMVisible()
+player:SetGMVisible(on)
+player:IsTaxiCheater()
+player:SetTaxiCheat(on)
+player:IsGMChat()
+player:SetGMChat(on)
+player:HasAtLoginFlag(flag)
+player:SetAtLoginFlag(flag)
+player:SetPvPDeath(on)
+player:IsRested()
+player:CanBlock()
+player:CanParry()
+player:IsImmuneToDamage()
+player:GetFreeTalentPoints()
+player:SetFreeTalentPoints(points)
+player:LearnTalent(talentId, rank)
+player:ResetTalents(noCost)
+player:GetComboTarget()
+player:GetComboPoints()
+player:AddComboPoints(target, count)
+player:ClearComboPoints()
+player:GetDrunkValue()
+player:SetDrunkValue(value, itemId)
+player:GetRestBonus()
+player:SetRestBonus(value)
+player:GetXPRestBonus()
+player:SetAcceptWhispers(on)
+player:GetChatTag()
+player:GetLatency()
+player:GetPlayerIP()
+player:GetAccountName()
+player:GetDbLocaleIndex()
+player:GetDbcLocale()
+player:GetInGameTime()
+player:InArena()
+player:InBattleground()
+player:InBattleGround()
+player:InBattlegroundQueue()
+player:InBattleGroundQueue()
+player:GetBattlegroundId()
+player:GetBattleGroundId()
+player:GetBattlegroundTypeId()
+player:GetBattleGroundTypeId()
+player:GetCurrentBattlegroundQueueSlot()
+player:GetLifetimeKills()
+player:SetLifetimeKills(value)
+player:AddLifetimeKills(value)
+player:RemoveLifetimeKills(value)
+player:GetMap()
+player:GetItemByGUID(guid)
+player:GetItemByGuid(guid)
+player:GetItemByPos(bag, slot)
+player:GetItemByPos(pos)
+player:GetItemByEntry(entry)
+player:GetEquippedItemBySlot(slot)
+player:GetGMRank()
+player:IsGM()
+player:SetGM(on)
+player:AddItem(itemId, count)
+player:HasItem(itemId, count, checkBank)
+player:GetItemCount(itemId, checkBank)
+player:CanUseItem(itemOrTemplateOrEntry)
+player:CanEquipItem(itemOrTemplateOrEntry, slot)
+player:RemoveItem(itemId, count, checkBank)
+player:HasSpell(spellId)
+player:HasSpellCooldown(spellId)
+player:GetSpellCooldownDelay(spellId)
+player:ResetSpellCooldown(spellId, update)
+player:ResetAllCooldowns()
+player:RemoveArenaSpellCooldowns()
+player:GetSpells()
+player:LearnSpell(spellId, dependent, talent)
+player:RemoveSpell(spellId, disabled, learnLowRank)
+player:SetBindPoint(x, y, z, mapId, areaId)
+player:GetHomebind()
+player:Teleport(mapId, x, y, z, o)
+player:SaveToDB(online, force, direct)
+player:KickPlayer()
+player:ResurrectPlayer(healthPercent, sickness)
+player:KillPlayer()
+player:SpawnBones()
+player:SpawnCorpseBones()
+player:DurabilityRepair(position, cost, discount)
+player:DurabilityRepairAll(cost, discount)
+player:DurabilityLoss(item, percent)
+player:DurabilityLossAll(percent, inventory)
+player:DurabilityPointsLoss(item, points)
+player:DurabilityPointsLossAll(points, inventory)
+player:DurabilityPointLossForEquipSlot(slot)
+```
+
+消息发送说明：
+
+- `player:SendBroadcastMessage()` / `player:SendSysMessage()` 发送聊天框系统消息。
+- `player:SendNotification()` 发送客户端中上方通知。
+- `player:SendAreaTriggerMessage()` / `player:SendAreaTrigger()` 发送区域触发样式的屏幕提示。
+- `player:SendAddonMessage(prefix, message)` 会把 `prefix .. "\t" .. message` 以 Turtle 1.12 已有的插件消息格式发给自己。
+- `player:SendAddonMessage(prefix, message, receiver)` 或 `player:SendAddonMessage(prefix, message, channel, receiver)` 会发给指定玩家；`channel` 参数为了兼容 3.3.5 Eluna 脚本可以保留传入，但 Turtle 当前实现会复用核心自己的插件消息通道，不按这个数值切换频道。
+- `player:SendCinematicStart(cinematicId)` 会触发客户端播放 DBC 中的过场镜头 ID。
+- `player:SendUpdateWorldState(field, value)` 更新客户端世界状态字段。
+- `player:Say()`、`player:Yell()`、`player:TextEmote()` 走核心聊天/表情广播，`language` 默认 `LANG_UNIVERSAL`。
+
+物品查找说明：
+
+- `player:GetItemByGUID(guid)` / `player:GetItemByGuid(guid)` 只接收 `ObjectGuid`，可用 `GetItemGUID(lowguid)` 或 `CreateItemGuid(lowguid)` 构造。
+- `player:GetItemByPos(bag, slot)` 按背包和槽位取物品；只传一个参数时按核心打包后的 `pos` 取物品。
+- `player:GetItemByEntry(entry)` 会在装备、背包、钥匙链和银行里找第一件匹配物品，找不到返回 `nil`。
+- `player:GetEquippedItemBySlot(slot)` 按装备栏位取当前装备，找不到返回 `nil`。
+- `player:GetItemCount(itemId, checkBank)` 返回物品数量；`checkBank = true` 时包含银行。
+- `player:CanUseItem()` 和 `player:CanEquipItem()` 支持传 `Item` 对象、`ItemTemplate` 对象或 item entry 数字；`CanEquipItem` 的 `slot` 使用核心装备栏位。
+- `DurabilityRepairAll(cost, discount)` 现在默认 `cost = true`，和 Eluna 默认行为一致；`DurabilityLoss*` / `DurabilityPointsLoss*` 会直接改物品耐久，脚本里要谨慎调用。
+
+状态查询说明：
+
+- `player:GetOriginalGroup()` / `player:GetOriginalSubGroup()` 读取战场等场景里保存的原队伍；没有时返回 `nil` 或 `0`。
+- `player:GetGroupInvite()` 返回当前邀请中的队伍对象，没有邀请时返回 `nil`。
+- `player:GetTrader()` 返回当前交易对象里的另一名玩家，没有交易时返回 `nil`。
+- `player:GetInGameTime()` 返回角色本次在线计时，单位按核心保存值。
+- `player:GetHomebind()` 当前返回 `{ mapId = ..., areaId = ... }`；Turtle 1.12 的炉石坐标字段是 `Player` 私有成员，Lua 适配层先不直接暴露 `x/y/z`。
+- `player:IsImmuneToDamage()` 会检查 `UNIT_FLAG_IMMUNE` 和当前所有伤害学派免疫，作为 1.12 近似实现。
+- `player:GetSpells()` 返回当前已学习、未被删除且模板存在的法术 ID 数组。
+- `player:ResetAllCooldowns()` 和 `player:RemoveArenaSpellCooldowns()` 会真实清理法术冷却；后者使用 Turtle 核心已有“竞技场清冷却”规则。
+- `player:AdvanceSkillsToMax()`、`player:AdvanceSkill(skillId, step)`、`player:AdvanceAllSkills(step)` 会真实提高技能熟练度，正式脚本里谨慎调用。
+- `player:LearnTalent(talentId, rank)` 和 `player:ResetTalents(noCost)` 调用 Turtle 核心天赋逻辑；当前 `ResetTalents` 额外返回 `true/false` 表示核心是否实际重置成功。
+- `player:AddComboPoints(target, count)` / `player:ClearComboPoints()` 会真实改变玩家连击点。
+- `player:SetBindPoint(x, y, z, mapId, areaId)` 会修改玩家炉石绑定位置，不只是弹确认窗口。
+- `player:HasQuest()`、`player:GetQuestStatus()`、`player:GetQuestRewardStatus()`、`player:CanCompleteQuest()` 可以传任务 ID，也可以传 `GetQuest()` 返回的 `Quest` 对象。
+- `player:CanRewardQuest(questOrId, reward, msg)` 的 `reward` 和 `msg` 是可选参数；不传时只做静默检查。
+- 技能相关函数使用核心技能 ID，例如采矿、草药学、武器熟练度等。
+- `player:SetSkill(skillId, step, current, max)` 的参数顺序按 Eluna 写法，内部会适配 Turtle 的 `SetSkill(skillId, current, max, step)`。
+- `player:GetReputation(factionId)` 返回声望点数，`player:GetReputationRank(factionId)` 返回核心 `ReputationRank` 数字。
+- `player:SetReputation(factionId, value)` 会查 `FactionEntry`，存在时写入玩家声望。
+- 移动状态函数读取核心当前状态，`player:CanFly()` 在 Turtle 1.12 中等同于当前是否处于飞行状态。
+- `CanSpeak`、`ToggleAFK`、`ToggleDND`、`SetGMVisible`、`SetGMChat`、`SetTaxiCheat`、`SetPvPDeath` 都是对 Turtle `Player` 现有状态接口的直接封装。
+- 战场相关函数只读取当前核心记录：是否在战场/竞技场/排队、战场实例 ID、战场类型 ID。
+- `GetLifetimeKills` 和对应 setter/add/remove 使用 1.12 的 `PLAYER_FIELD_LIFETIME_HONORABLE_KILLS` 字段。
+- `player:GetComboTarget()` 返回 `ObjectGuid`，没有连击点目标时返回空 GUID。
+- `player:GetPlayerIP()` 和 `player:GetAccountName()` 来自当前 `WorldSession`，玩家不在线或没有会话时返回 `nil`。
+
+任务和 Gossip：
+
+```lua
+player:AddQuest(questOrId, questGiver)
+player:CompleteQuest(questId)
+player:IncompleteQuest(questId)
+player:GetQuestStatus(questId)
+player:HasQuest(questId)
+player:GetQuestRewardStatus(questId)
+player:CanCompleteQuest(questId)
+player:CanCompleteRepeatableQuest(questOrId)
+player:CanRewardQuest(questOrId, reward, msg)
+player:GetQuestLevel(questOrId)
+player:GetReqKillOrCastCurrentCount(questOrId, creatureOrGameObjectEntry)
+player:HasQuestForGO(gameObjectEntry)
+player:HasQuestForItem(itemEntry)
+player:CanShareQuest(questOrId)
+player:SetQuestStatus(questOrId, status)
+player:RewardQuest(questOrId, reward, questGiver, announce)
+player:FailQuest(questOrId)
+player:RemoveQuest(questOrId)
+player:RemoveActiveQuest(questOrId)
+player:KilledMonsterCredit(entry)
+player:TalkedToCreature(entry, creatureOrGuid)
+player:AreaExploredOrEventHappens(questId)
+player:GroupEventHappens(questId, object)
+player:GossipClearMenu()
+player:GossipMenuAddItem(icon, text, sender, action, coded, boxText)
+player:GossipSendMenu(textId, object)
+player:GossipComplete()
+```
+
+`HasQuestForGO` / `HasQuestForItem` 用于检查玩家是否因为任务需要对应 GameObject 或物品。`CanCompleteRepeatableQuest(questOrId)` 调用 Turtle 核心重复任务完成检查。
+
+`GetQuestLevel(questOrId)` 返回按玩家等级修正后的任务等级；`GetReqKillOrCastCurrentCount(questOrId, entry)` 返回当前杀怪、施法或交互类目标进度。GameObject 目标在 1.12 核心里通常以负 entry 存在，这里同时兼容传正数 GameObject entry。
+
+`TalkedToCreature(entry, creatureOrGuid)` 可以传生物对象，也可以传 `ObjectGuid`。
+
+`RemoveActiveQuest` 目前作为 `RemoveQuest` 的兼容别名；Turtle 1.12 没有 3.3.5 那个完全同名的 `RemoveActiveQuest` 核心接口。
+
+`GossipSendMenu` 的 `object` 现在可以传 `Player`、`Creature`、`GameObject` 或 `Item`。物品 Gossip 脚本里要传当前 `item`，这样客户端点击菜单时才会带回物品 GUID。
+
+## Creature 方法
+
+除通用 `Unit` / `WorldObject` 方法外，当前可用：
+
+```lua
+creature:GetName()
+creature:GetTemplate()
+creature:GetCreatureTemplate()
+creature:GetCreatureInfo()
+creature:GetDBTableGUIDLow()
+creature:Say(message, language)
+creature:Yell(message, language)
+creature:Whisper(message, player)
+creature:TextEmote(message, target, bossEmote)
+creature:CastSpell(target, spellId, triggered)
+creature:DespawnOrUnsummon(delay)
+creature:ForcedDespawn(delay)
+creature:GetRespawnDelay()
+creature:SetRespawnDelay(delay)
+```
+
+说明：
+
+- `creature:GetTemplate()` / `creature:GetCreatureTemplate()` / `creature:GetCreatureInfo()` 返回只读 `CreatureTemplate` 模板对象。
+
+## Aura 方法
+
+`Aura` 是单位身上的光环实例对象，可以通过 `unit:GetAura(spellId, effectIndex)` 取得，也可以由 `unit:AddAura(spellId, caster)` 返回。
+它对应核心里当前仍存在的光环指针，脚本中不要把它长期保存到全局变量或定时器里；光环被移除后，请重新用 `GetAura` 查询。
+
+当前可用：
+
+```lua
+aura:GetCaster()
+aura:GetCasterGUID()
+aura:GetCasterGuid()
+aura:GetCasterGUIDLow()
+aura:GetCasterGuidLow()
+aura:GetCasterLevel()
+aura:GetDuration()
+aura:GetMaxDuration()
+aura:GetAuraId()
+aura:GetAuraID()
+aura:GetId()
+aura:GetSpellId()
+aura:GetStackAmount()
+aura:GetOwner()
+aura:SetDuration(duration)
+aura:SetMaxDuration(duration)
+aura:SetStackAmount(stackAmount)
+aura:Remove()
+```
+
+说明：
+
+- `GetCaster()` 返回施法单位，施法者不在世界里或已经不存在时返回 `nil`。
+- `GetCasterGUID()` / `GetCasterGuid()` 返回 `ObjectGuid` 对象；需要旧式低位数字时用 `GetCasterGUIDLow()`。
+- `GetOwner()` 返回当前拥有这个光环的单位。
+- `SetDuration()` / `SetMaxDuration()` 的单位是毫秒，会同步核心的光环持续时间字段。
+- `Remove()` 会移除这个光环实例；如果它是该法术 holder 上最后一个效果，会一并移除整个 holder。
+
+## CreatureTemplate 方法
+
+可以通过 `GetCreatureTemplate(entry)`、`GetCreatureInfo(entry)` 或 `creature:GetTemplate()` 取得生物模板对象。
+这是 `creature_template` / `CreatureInfo` 的只读数据，不是地图上已经刷出的动态生物实例。
+
+```lua
+template:GetId()
+template:GetEntry()
+template:GetName()
+template:GetSubName()
+template:GetSubname()
+template:GetDisplayId(index)
+template:GetDisplayID(index)
+template:GetDisplayIdCount()
+template:GetMountDisplayId()
+template:GetGossipMenuId()
+template:GetMinLevel()
+template:GetMaxLevel()
+template:GetMinHealth()
+template:GetMaxHealth()
+template:GetMinMana()
+template:GetMaxMana()
+template:GetArmor()
+template:GetFaction()
+template:GetFactionTemplate()
+template:GetNpcFlags()
+template:GetNPCFlags()
+template:GetWalkSpeed()
+template:GetRunSpeed()
+template:GetScale()
+template:GetDetectionRange()
+template:GetCallForHelpRange()
+template:GetLeashRange()
+template:GetRank()
+template:GetXpMultiplier()
+template:GetXPMultiplier()
+template:GetMinDamage()
+template:GetMaxDamage()
+template:GetDamageSchool()
+template:GetAttackPower()
+template:GetDamageMultiplier()
+template:GetBaseAttackTime()
+template:GetRangedAttackTime()
+template:GetUnitClass()
+template:GetUnitFlags()
+template:GetDynamicFlags()
+template:GetFamily()
+template:GetCreatureFamily()
+template:GetTrainerType()
+template:GetTrainerSpell()
+template:GetTrainerClass()
+template:GetTrainerRace()
+template:GetRangedMinDamage()
+template:GetRangedMaxDamage()
+template:GetRangedAttackPower()
+template:GetType()
+template:GetCreatureType()
+template:GetTypeFlags()
+template:GetCreatureTypeFlags()
+template:GetLootId()
+template:GetPickpocketLootId()
+template:GetSkinningLootId()
+template:GetResistance(school)
+template:GetHolyResistance()
+template:GetFireResistance()
+template:GetNatureResistance()
+template:GetFrostResistance()
+template:GetShadowResistance()
+template:GetArcaneResistance()
+template:GetSpellId(index)
+template:GetSpellListId()
+template:GetPetSpellListId()
+template:GetSpawnSpellId()
+template:GetAuraCount()
+template:GetAuraId(index)
+template:GetMinGold()
+template:GetMaxGold()
+template:GetGoldMin()
+template:GetGoldMax()
+template:GetAIName()
+template:GetMovementType()
+template:GetInhabitType()
+template:IsCivilian()
+template:IsRacialLeader()
+template:GetRegenerationFlags()
+template:GetEquipmentId()
+template:GetTrainerId()
+template:GetVendorId()
+template:GetMechanicImmuneMask()
+template:GetSchoolImmuneMask()
+template:GetImmunityFlags()
+template:GetFlagsExtra()
+template:HasFlagExtra(flag)
+template:GetPhaseQuestId()
+template:GetScriptId()
+template:IsTameable()
+template:GetObjectGuid(lowguid)
+```
+
+说明：
+
+- `CreatureTemplate` 的 `GetDisplayId(index)`、`GetSpellId(index)`、`GetAuraId(index)` 下标使用 Lua 风格的 `1` 开始。
+- `GetDisplayId(index)` 的 `index` 范围是 `1` 到 `4`；`GetSpellId(index)` 的范围是 `1` 到 `4`。
+- `GetAuraId(index)` 按模板 `auras` 字段实际数量读取，使用前可以先调用 `GetAuraCount()`。
+- `GetResistance(school)` 的 school 使用核心 `SPELL_SCHOOL_*` 数值：`0` 是护甲，`1` 到 `6` 分别是神圣、火焰、自然、冰霜、暗影、奥术。
+- `GetObjectGuid(lowguid)` 用当前模板 entry 和传入的低位 GUID 构造 `ObjectGuid`，常用于和地图 GUID 反查函数配合。
+
+## GameObject 方法
+
+```lua
+gameobject:GetName()
+gameobject:GetDBTableGUIDLow()
+gameobject:GetTemplate()
+gameobject:GetGameObjectTemplate()
+gameobject:GetGameObjectInfo()
+gameobject:GetGOTemplate()
+gameobject:GetGOInfo()
+gameobject:GetGoType()
+gameobject:GetGoState()
+gameobject:SetGoState(state)
+gameobject:GetLootState()
+gameobject:GetLootRecipient()
+gameobject:GetLootRecipientGroup()
+gameobject:SetLootState(state)
+gameobject:AddLoot(itemEntry, amount, ...)
+gameobject:GetDisplayId()
+gameobject:SetDisplayId(displayId)
+gameobject:GetRespawnDelay()
+gameobject:SetRespawnDelay(delay)
+gameobject:SetRespawnTime(delay)
+gameobject:IsSpawned()
+gameobject:HasQuest(questId)
+gameobject:IsTransport()
+gameobject:IsActive()
+gameobject:IsDestructible()
+gameobject:IsVisible()
+gameobject:SetVisible(visible)
+gameobject:GetOwner()
+gameobject:Use(user)
+gameobject:UseDoorOrButton(delay)
+gameobject:Respawn()
+gameobject:Despawn()
+gameobject:Refresh()
+gameobject:SaveToDB()
+gameobject:RemoveFromWorld(deleteFromDB)
+```
+
+说明：
+
+- `gameobject:GetTemplate()` / `gameobject:GetGameObjectInfo()` / `gameobject:GetGOInfo()` 返回只读 `GameObjectTemplate` 模板对象。
+- `GetLootRecipient()` / `GetLootRecipientGroup()` 当前先返回 `nil`。Turtle 1.12 的 GameObject 只公开允许拾取判断，没有 3.3.5 Eluna 那种直接取原始拾取玩家/队伍的公开接口。
+- `AddLoot(itemEntry, amount, ...)` 会把固定物品加入当前 GameObject 的临时 loot，返回值为兼容占位的 `0`。Turtle 这里不是立即创建真实背包物品实例，所以没有可返回的真实物品 GUID。
+- `IsDestructible()` 当前返回 `false`，因为 Turtle 1.12 没有 3.3.5 的可破坏建筑 GameObject 系统。
+- `RemoveFromWorld(deleteFromDB)` 会把对象从世界移除；`deleteFromDB=true` 时还会删除数据库记录。这个接口会让当前对象指针失效，脚本里调用后不要继续使用同一个 `gameobject` 变量。
+
+## GameObjectTemplate 方法
+
+可以通过 `GetGameObjectTemplate(entry)`、`GetGameObjectInfo(entry)`、`GetGOTemplate(entry)`、`GetGOInfo(entry)` 或 `gameobject:GetTemplate()` 取得 GameObject 模板对象。
+这是 `gameobject_template` / `GameObjectInfo` 的只读数据，不是地图上已经刷出的动态 GameObject 实例。
+
+```lua
+template:GetId()
+template:GetEntry()
+template:GetType()
+template:GetGoType()
+template:GetGOType()
+template:GetDisplayId()
+template:GetDisplayID()
+template:GetName()
+template:GetFaction()
+template:GetFactionTemplate()
+template:GetFlags()
+template:GetSize()
+template:GetData(index)
+template:GetRawData(index)
+template:GetDataCount()
+template:GetMinMoneyLoot()
+template:GetMaxMoneyLoot()
+template:GetMinGold()
+template:GetMaxGold()
+template:GetPhaseQuestId()
+template:GetScriptId()
+template:IsDespawnAtAction()
+template:IsUsableMounted()
+template:GetLockId()
+template:GetDespawnPossibility()
+template:CannotBeUsedUnderImmunity()
+template:GetCharges()
+template:GetCooldown()
+template:GetLinkedGameObjectEntry()
+template:GetLinkedTrapId()
+template:GetAutoCloseTime()
+template:GetLootId()
+template:GetGossipMenuId()
+template:IsLargeGameObject()
+template:IsInfiniteGameObject()
+template:IsServerOnly()
+template:GetInteractionDistance()
+template:GetEventScriptId()
+template:GetDeactivateTime()
+template:GetQuestId()
+template:GetSpellId()
+template:GetRadius()
+template:GetLevel()
+template:GetObjectGuid(lowguid)
+```
+
+说明：
+
+- `GetData(index)` / `GetRawData(index)` 读取 `gameobject_template` 的 `data0` 到 `data23`，下标使用 Lua 风格的 `1` 到 `24`。
+- 不同 GameObject 类型的专属字段可以先用 `GetType()` 判断，再按核心结构读取对应 `data` 下标。
+- `GetQuestId()`、`GetSpellId()`、`GetRadius()`、`GetLevel()` 会按当前 GameObject 类型读取常见字段，类型不适用时返回 `0`。
+- `GetObjectGuid(lowguid)` 用当前模板 entry 和传入的低位 GUID 构造 `ObjectGuid`，常用于和地图 GUID 反查函数配合。
+
+## Item 方法
+
+```lua
+item:GetName()
+item:GetEntry()
+item:GetTemplate()
+item:GetItemTemplate()
+item:GetProto()
+item:GetGUIDLow()
+item:GetCount()
+item:SetCount(count)
+item:GetBagSlot()
+item:GetSlot()
+item:IsEquipped()
+item:IsSoulBound()
+item:IsBound()
+item:IsAccountBound()
+item:IsBoundAccountWide()
+item:IsBoundByEnchant()
+item:IsNotBoundToPlayer(player)
+item:IsLocked()
+item:IsBag()
+item:IsNotEmptyBag()
+item:IsBroken()
+item:CanBeTraded()
+item:IsInTrade()
+item:IsInBag()
+item:HasQuest(questId)
+item:IsPotion()
+item:IsConjuredConsumable()
+item:IsCurrencyToken()
+item:IsWeaponVellum()
+item:IsArmorVellum()
+item:IsRefundExpired()
+item:GetItemLink()
+item:GetOwnerGUID()
+item:GetOwnerGuid()
+item:GetOwner()
+item:GetMaxStackCount()
+item:GetEnchantmentId(slot)
+item:GetSpellId(index)
+item:GetSpellTrigger(index)
+item:GetClass()
+item:GetSubClass()
+item:GetDisplayId()
+item:GetQuality()
+item:GetBuyCount()
+item:GetBuyPrice()
+item:GetSellPrice()
+item:GetInventoryType()
+item:GetAllowableClass()
+item:GetAllowableRace()
+item:GetItemLevel()
+item:GetRequiredLevel()
+item:GetStatsCount()
+item:GetRandomProperty()
+item:GetRandomPropertyId()
+item:GetRandomSuffix()
+item:GetItemSet()
+item:GetBagSize()
+item:SetOwner(player)
+item:SetBinding(soulbound)
+item:SetEnchantment(enchantId, slot)
+item:ClearEnchantment(slot)
+item:SaveToDB(direct)
+```
+
+说明：
+
+- `item:GetTemplate()` / `item:GetItemTemplate()` / `item:GetProto()` 返回只读 `ItemTemplate` 模板对象。
+- `GetSpellId(index)` / `GetSpellTrigger(index)` 的 `index` 使用核心物品模板下标 `0` 到 `4`。
+- `GetEnchantmentId(slot)`、`SetEnchantment(enchantId, slot)`、`ClearEnchantment(slot)` 使用 Turtle/MaNGOS 的附魔槽位编号。
+- `SetEnchantment` 和 `ClearEnchantment` 会返回 `true` / `false` 表示是否成功。
+- `GetItemLink()` 按 1.12 客户端可识别的物品链接格式返回字符串。
+- `CurrencyToken`、vellum 和 refund 是 3.3.5/WotLK 语义，Turtle 1.12 当前没有等价系统，所以这些判断兼容返回 `false`。
+- `GetRandomSuffix()` 当前返回 `0`；Turtle 1.12 物品模板主要使用 `RandomProperty`，没有 3.3.5 那套单独的随机后缀字段。
+
+## ItemTemplate 方法
+
+可以通过 `GetItemTemplate(itemId)`、`GetItemPrototype(itemId)` 或 `item:GetTemplate()` 取得物品模板对象。
+这是 `item_template` / `ItemPrototype` 的只读数据，不是玩家背包里的动态物品实例。
+
+```lua
+template:GetId()
+template:GetEntry()
+template:GetItemId()
+template:GetName()
+template:GetDescription()
+template:GetClass()
+template:GetSubClass()
+template:GetQuality()
+template:GetDisplayId()
+template:GetDisplayID()
+template:GetFlags()
+template:GetExtraFlags()
+template:GetIcon()
+template:GetBuyCount()
+template:GetBuyPrice()
+template:GetSellPrice()
+template:GetInventoryType()
+template:GetAllowableClass()
+template:GetAllowableRace()
+template:GetItemLevel()
+template:GetRequiredLevel()
+template:GetRequiredSkill()
+template:GetRequiredSkillRank()
+template:GetRequiredSpell()
+template:GetRequiredReputationFaction()
+template:GetRequiredReputationRank()
+template:GetMaxCount()
+template:GetStackable()
+template:GetMaxStackSize()
+template:GetContainerSlots()
+template:GetDelay()
+template:GetAmmoType()
+template:GetBlock()
+template:GetArmor()
+template:GetBonding()
+template:GetStartQuest()
+template:GetItemSet()
+template:GetMaxDurability()
+template:GetBagFamily()
+template:GetFoodType()
+template:GetOtherTeamEntry()
+template:GetStatsCount()
+template:GetStatType(index)
+template:GetStatValue(index)
+template:GetSpellId(index)
+template:GetSpellID(index)
+template:GetSpellTrigger(index)
+template:GetSpellCharges(index)
+template:GetSpellCooldown(index)
+template:GetSpellCategory(index)
+template:GetSpellCategoryCooldown(index)
+template:GetRecoveryTimeForSpell(spellId)
+template:GetCategoryRecoveryTimeForSpell(spellId)
+template:IsQuestItem()
+template:IsPotion()
+template:IsConjuredConsumable()
+template:IsWeapon()
+template:IsRangedWeapon()
+template:IsOffHandItem()
+template:HasSignature()
+```
+
+说明：
+
+- `ItemTemplate` 的 `GetStat*()` 和 `GetSpell*()` 下标使用 Lua 风格的 `1` 到 `10` / `1` 到 `5`；`Item` 实例原有的 `item:GetSpellId(index)` 仍保持核心下标 `0` 到 `4`。
+- `GetIcon()` 是 3.3.5 Eluna 兼容方法；当前 Turtle 1.12 的 `ItemDisplayInfoEntry` 没有加载物品图标路径字段，所以这里兼容返回空字符串 `""`。
+- `GetItemTemplate()` 找不到模板时返回 `nil`。
+
+## Quest 方法
+
+```lua
+quest:GetId()
+quest:GetQuestId()
+quest:GetTitle()
+quest:GetLevel()
+quest:GetQuestLevel()
+quest:GetMinLevel()
+quest:GetMaxLevel()
+quest:GetFlags()
+quest:GetQuestFlags()
+quest:HasFlag(flag)
+quest:IsRepeatable()
+quest:IsDaily()
+quest:GetNextQuestId()
+quest:GetPrevQuestId()
+quest:GetNextQuestInChain()
+quest:GetType()
+```
+
+说明：
+
+- `IsDaily()` 读取 Turtle 任务的每日特殊标记。
+- `GetNextQuestId()`、`GetPrevQuestId()`、`GetNextQuestInChain()` 读取任务链字段，没配置时通常返回 `0`。
+
+## SpellInfo 方法
+
+可以通过 `GetSpellInfo(spellId)` 或 `GetSpellEntry(spellId)` 取得法术模板对象，找不到时返回 `nil`。
+这是 DBC/核心里的只读法术数据，不是一次正在释放中的动态 `Spell` 对象。
+
+法术效果下标使用核心的 `0、1、2`，不是 Lua 数组的 `1、2、3`。
+
+常用方法：
+
+```lua
+spell:GetId()
+spell:GetEntry()
+spell:GetSpellId()
+spell:GetName(locale)
+spell:GetSpellName()
+spell:GetRank(locale)
+spell:GetSchool()
+spell:GetSchoolMask()
+spell:GetCategory()
+spell:GetDispel()
+spell:GetMechanic()
+spell:GetAllMechanicMask()
+spell:GetAttributes(index)
+spell:HasAttribute(flag)
+spell:HasAttribute(index, flag)
+spell:GetAttributesEx()
+spell:GetAttributesEx2()
+spell:GetAttributesEx3()
+spell:GetAttributesEx4()
+spell:GetAttributesEx5()
+spell:GetAttributesEx6()
+spell:GetAttributesEx7()
+spell:GetStances()
+spell:GetStancesNot()
+spell:GetTargets()
+spell:GetTargetCreatureType()
+spell:GetRequiresSpellFocus()
+spell:GetFacingCasterFlags()
+spell:GetCasterAuraState()
+spell:GetTargetAuraState()
+spell:GetCasterAuraStateNot()
+spell:GetTargetAuraStateNot()
+spell:GetCasterAuraSpell()
+spell:GetTargetAuraSpell()
+spell:GetExcludeCasterAuraSpell()
+spell:GetExcludeTargetAuraSpell()
+spell:GetCastingTimeIndex()
+spell:GetRecoveryTime()
+spell:GetRawRecoveryTime()
+spell:GetCategoryRecoveryTime()
+spell:GetStartRecoveryTime()
+spell:GetStartRecoveryCategory()
+spell:GetInterruptFlags()
+spell:GetAuraInterruptFlags()
+spell:GetChannelInterruptFlags()
+spell:GetProcFlags()
+spell:GetProcChance()
+spell:GetProcCharges()
+spell:GetMaxLevel()
+spell:GetBaseLevel()
+spell:GetSpellLevel()
+spell:GetDurationIndex()
+spell:GetDuration()
+spell:GetPowerType()
+spell:GetManaCost()
+spell:GetManaCostPerlevel()
+spell:GetManaPerSecond()
+spell:GetManaPerSecondPerLevel()
+spell:GetManaCostPercentage()
+spell:GetRangeIndex()
+spell:GetSpeed()
+spell:GetStackAmount()
+spell:GetSpellFamilyName()
+spell:GetSpellFamilyFlags()
+spell:GetMaxTargetLevel()
+spell:GetMaxAffectedTargets()
+spell:GetDmgClass()
+spell:GetPreventionType()
+spell:GetSpellIconID()
+spell:GetSpellPriority()
+spell:GetActiveIconID()
+spell:GetSpellVisual()
+spell:GetTotem(index)
+spell:GetTotemCategory([index])
+spell:GetReagent(index)
+spell:GetReagentCount(index)
+spell:GetEquippedItemClass()
+spell:GetEquippedItemSubClassMask()
+spell:GetEquippedItemInventoryTypeMask()
+spell:GetAreaGroupId()
+spell:GetRuneCostID()
+```
+
+效果相关方法：
+
+```lua
+spell:GetEffect(effectIndex)
+spell:GetEffectDieSides(effectIndex)
+spell:GetEffectRealPointsPerLevel([effectIndex])
+spell:GetEffectBaseDice(effectIndex)
+spell:GetEffectBasePoints(effectIndex)
+spell:GetEffectMechanic(effectIndex)
+spell:GetEffectImplicitTargetA(effectIndex)
+spell:GetEffectImplicitTargetB(effectIndex)
+spell:GetEffectRadiusIndex([effectIndex])
+spell:GetEffectApplyAuraName(effectIndex)
+spell:GetEffectAmplitude(effectIndex)
+spell:GetEffectMultipleValue(effectIndex)
+spell:GetEffectValueMultiplier([effectIndex])
+spell:GetEffectChainTarget(effectIndex)
+spell:GetEffectItemType(effectIndex)
+spell:GetEffectMiscValue(effectIndex)
+spell:GetEffectMiscValueB([effectIndex])
+spell:GetEffectTriggerSpell(effectIndex)
+spell:GetEffectPointsPerComboPoint(effectIndex)
+spell:GetEffectSpellClassMask([effectIndex])
+spell:GetDamageMultiplier(effectIndex)
+spell:GetEffectDamageMultiplier([effectIndex])
+spell:GetEffectBonusMultiplier([effectIndex])
+spell:CalculateSimpleValue(effectIndex)
+spell:HasAura(auraType)
+spell:HasEffect(effectId)
+spell:IsPassive()
+spell:IsPositive()
+spell:IsBinary()
+spell:IsDispel()
+spell:IsNonPeriodicDispel()
+spell:IsCCSpell()
+spell:IsCustomSpell()
+spell:IsPvEHeartBeat()
+```
+
+3.3.5 兼容查询/判断方法：
+
+```lua
+spell:HasAreaAuraEffect()
+spell:IsAffectingArea()
+spell:IsExplicitDiscovery()
+spell:IsLootCrafting()
+spell:IsProfessionOrRiding()
+spell:IsProfession()
+spell:IsPrimaryProfession()
+spell:IsPrimaryProfessionFirstRank()
+spell:IsAbilityLearnedWithProfession()
+spell:IsAbilityOfSkillType(skillType)
+spell:IsTargetingArea()
+spell:NeedsExplicitUnitTarget()
+spell:NeedsToBeTriggeredByCaster(triggeringSpellInfo)
+spell:IsSelfCast()
+spell:IsAutocastable()
+spell:IsStackableWithRanks()
+spell:IsPassiveStackableWithRanks()
+spell:IsMultiSlotAura()
+spell:IsCooldownStartedOnEvent()
+spell:IsDeathPersistent()
+spell:IsRequiringDeadTarget()
+spell:IsAllowingDeadTarget()
+spell:CanBeUsedInCombat()
+spell:IsPositiveEffect(effectIndex)
+spell:IsChanneled()
+spell:NeedsComboPoints()
+spell:IsBreakingStealth()
+spell:IsRangedWeaponSpell()
+spell:IsAutoRepeatRangedSpell()
+spell:IsAffectedBySpellMods()
+spell:CanPierceImmuneAura(auraSpellInfo)
+spell:CanDispelAura(auraSpellInfo)
+spell:IsSingleTarget()
+spell:IsAuraExclusiveBySpecificWith(otherSpellInfo)
+spell:IsAuraExclusiveBySpecificPerCasterWith(otherSpellInfo)
+spell:CheckShapeshift(form)
+spell:CheckLocation(mapId, zoneId, areaId, player, strict)
+spell:CheckTarget(caster, target, implicit)
+spell:CheckExplicitTarget(caster, target, item)
+spell:CheckTargetCreatureType(target)
+spell:GetAllEffectsMechanicMask()
+spell:GetEffectMechanicMask(effectIndex)
+spell:GetSpellMechanicMaskByEffectMask(effectMask)
+spell:GetDispelMask([dispelType])
+spell:GetExplicitTargetMask()
+spell:GetAuraState()
+spell:GetSpellSpecific()
+```
+
+SpellInfo / SpellEntry 兼容说明：
+
+- `SpellInfo` 的 3.3.5 参考方法名已经补齐；当前 `SpellInfoMethods.h` 差异脚本检查结果为 `ref=57 target=165 missing=0`。`target` 数量更高是因为本适配层还保留了 `GetEntry`、`GetSpellId`、大小写别名和旧 `SpellEntry` 兼容入口。
+- 旧 `SpellEntryMethods.h` 的参考方法名也已经并入同一个法术模板对象；当前检查结果为 `ref=92 target=165 missing=0`。
+- `GetSpellName()` 返回所有客户端语言的名称 table；`GetName(locale)` 仍按 SpellInfo 风格返回指定语言字符串。
+- `GetEffectRealPointsPerLevel()`、`GetEffectRadiusIndex()`、`GetEffectValueMultiplier()`、`GetEffectDamageMultiplier()`、`GetEffectBonusMultiplier()` 这些旧 SpellEntry 风格方法在不传下标时返回 1 到 3 的 table，传入 `effectIndex` 时返回单个效果值。
+- `GetAttributesEx5()`、`GetAttributesEx6()`、`GetAttributesEx7()`、`GetFacingCasterFlags()`、`GetCasterAuraStateNot()`、`GetTargetAuraStateNot()`、`GetCasterAuraSpell()`、`GetTargetAuraSpell()`、`GetExcludeCasterAuraSpell()`、`GetExcludeTargetAuraSpell()`、`GetEffectMiscValueB()`、`GetEffectSpellClassMask()`、`GetTotemCategory()`、`GetAreaGroupId()`、`GetRuneCostID()` 是 3.3.5/WotLK 字段，Turtle 1.12 没有对应字段，当前返回 `0` 或全 0 table。
+- `CheckLocation()`、`CheckTarget()`、`CheckExplicitTarget()` 当前只做 Turtle 1.12 可直接判断的基础检查，返回核心 `SpellCastResult` 数值；没有完全复刻 3.3.5 的地图区域、条件、脚本目标和物品目标检查。
+- `IsExplicitDiscovery()`、`NeedsToBeTriggeredByCaster()` 目前没有 Turtle 1.12 等价结构，保留方法名并兼容返回 `false`。
+- `GetAuraState()` 先返回 `CasterAuraState`，没有时返回 `TargetAuraState`；1.12 没有 3.3.5 独立 AuraState 封装。
+- `GetAllEffectsMechanicMask()` 当前映射到 Turtle 的 `GetAllSpellMechanicMask()`；会同时包含法术本体 mechanic 和效果 mechanic。
+- `CanPierceImmuneAura()`、`IsAutocastable()`、`IsStackableWithRanks()`、`IsMultiSlotAura()` 使用 Turtle 现有字段近似判断，适合脚本兼容和调试，不能当成 3.3.5 全量规则判定。
+
+## Spell 方法
+
+`RegisterSpellEvent(spellId, eventId, function)` 的第三个参数，以及 `RegisterPlayerEvent(5, function(event, player, spell, skipCheck) end)` 里的 `spell` 参数，都是动态 `Spell` 对象，只保证在当前回调期间有效，不要保存到全局变量或定时器里长期使用。
+
+```lua
+spell:GetCaster()
+spell:GetEntry()
+spell:GetId()
+spell:GetSpellId()
+spell:GetSpellInfo()
+spell:GetSpellEntry()
+spell:GetCastTime()
+spell:GetCastedTime()
+spell:GetPowerCost()
+spell:GetReagentCost()
+spell:GetDuration()
+spell:GetTargetDest()
+spell:GetTargets()
+spell:GetTarget()
+spell:GetUnitTarget()
+spell:GetGameObjectTarget()
+spell:GetGOTarget()
+spell:GetItemTarget()
+spell:GetCastItem()
+spell:IsTriggered()
+spell:IsCastByItem()
+spell:IsAutoRepeat()
+spell:SetAutoRepeat(repeat)
+spell:Cast([skipCheck])
+spell:Cancel()
+spell:Finish([ok])
+```
+
+说明：
+
+- `GetSpellInfo()` / `GetSpellEntry()` 返回对应的只读 `SpellInfo` 模板对象。
+- `GetTargets()` 返回 `SpellCastTargets` 对象，也只在当前回调期间有效。
+- `GetDuration()` 返回法术模板配置的持续时间；如果脚本需要读取目标、坐标、物品等本次施法状态，优先使用动态 `Spell` 或 `SpellCastTargets` 对象。
+- `GetReagentCost()` 返回一个 table，key 是只读 `ItemTemplate` 对象，value 是该材料数量；没有材料时返回空表。
+- `GetTargetDest()` 在本次施法有目标坐标时返回 `x, y, z` 三个数字；没有目标坐标时返回 `nil, nil, nil`。
+- `Cast()`、`Finish()`、`Cancel()`、`SetAutoRepeat()` 会改变当前施法流程，建议只在明确知道核心状态的施法事件里使用。
+- `Cancel()` 会调用核心 `Spell::cancel()`；不要在取消事件里反复调用。
+
+## SpellCastTargets 方法
+
+`RegisterItemEvent(entry, 2, function(event, player, item, target) end)` 里的 `target`
+现在是 `SpellCastTargets` 对象。它表示本次物品使用传入的施法目标。
+
+```lua
+target:GetTargetMask()
+target:GetUnitTarget()
+target:GetGameObjectTarget()
+target:GetGOTarget()
+target:GetItemTarget()
+target:GetUnitTargetGUID()
+target:GetUnitTargetGuid()
+target:GetUnitTargetGUIDLow()
+target:GetUnitTargetGuidLow()
+target:GetGameObjectTargetGUID()
+target:GetGameObjectTargetGuid()
+target:GetGameObjectTargetGUIDLow()
+target:GetGameObjectTargetGuidLow()
+target:GetGOTargetGUID()
+target:GetGOTargetGuid()
+target:GetGOTargetGUIDLow()
+target:GetGOTargetGuidLow()
+target:GetItemTargetGUID()
+target:GetItemTargetGuid()
+target:GetItemTargetGUIDLow()
+target:GetItemTargetGuidLow()
+target:GetItemTargetEntry()
+target:GetSource()       -- 返回 x, y, z
+target:GetDestination()  -- 返回 x, y, z
+target:GetStringTarget()
+target:IsEmpty()
+```
+
+注意：`SpellCastTargets` 保存的是核心当前回调中的目标指针，Lua 脚本不要把它保存到定时器或全局变量里长期使用。
+`Get*TargetGUID()` 返回 `ObjectGuid` 对象；需要旧式低位数字时使用对应的 `Get*TargetGUIDLow()`。
+
+## Corpse 方法
+
+`player:GetCorpse()` 会返回玩家当前尸体对象，没有尸体时返回 `nil`。`Corpse` 也继承常用 `Object` / `WorldObject` 方法，例如 `GetGUID()`、`GetGUIDLow()`、`GetMapId()`、`GetLocation()`、`GetDistance()`、`ToCorpse()` 等。
+
+```lua
+corpse:GetOwnerGUID()
+corpse:GetOwnerGuid()
+corpse:GetGhostTime()
+corpse:GetType()
+corpse:ResetGhostTime()
+corpse:SaveToDB()
+```
+
+说明：
+
+- `GetOwnerGUID()` 返回尸体所属玩家的 `ObjectGuid` 对象。
+- `GetType()` 使用 Turtle 的 `CorpseType`：`0` 骨骸，`1` 可复活 PvE 尸体，`2` 可复活 PvP 尸体。
+- `SaveToDB()` 对骨骸类型当前不执行保存，因为 Turtle 1.12 核心明确禁止保存骨骸，直接保存会触发断言。
+
+## Group 方法
+
+`player:GetGroup()` 会返回玩家当前队伍对象，没有队伍时返回 `nil`。
+
+```lua
+group:GetId()
+group:GetGUID()
+group:GetGuid()
+group:GetMembersCount()
+group:GetMemberCount()
+group:IsRaid()
+group:IsRaidGroup()
+group:IsFull()
+group:IsBGGroup()
+group:IsLFGGroup()
+group:GetLeaderGUID()
+group:GetLeaderGuid()
+group:GetLeaderName()
+group:GetLeader()
+group:IsLeader(player)
+group:IsLeader(guid)
+group:IsMember(player)
+group:IsMember(guid)
+group:IsAssistant(playerOrGuid)
+group:SameSubGroup(player1, player2)
+group:HasFreeSlotSubGroup(subGroup)
+group:GetMemberGroup(player)
+group:GetMemberGroup(guid)
+group:GetMemberGUID(name)
+group:GetMemberGuid(name)
+group:GetGroupType()
+group:GetMembers()
+group:SetLeader(playerOrGuid)
+group:AddMember(player)
+group:RemoveMember(playerOrGuid, method)
+group:Disband()
+group:ConvertToRaid()
+group:SetMembersGroup(playerOrGuid, subGroup)
+group:SetTargetIcon(icon, targetGuidOrObject)
+group:SetMemberFlag(playerOrGuid, apply, flag)
+group:SendPacket(packet)
+```
+
+说明：
+
+- `group:GetMembers()` 返回在线玩家对象数组。
+- `group:GetLeaderGUID()` / `group:GetMemberGUID(name)` 返回 `ObjectGuid` 对象，需要低位数字时调用 `guid:GetGUIDLow()`。
+- `group:GetGUID()` 在 Turtle 1.12 中返回队伍数据库 ID 数字；1.12 核心没有 3.3.5 那种独立 Group GUID。
+- `group:GetGroupType()` 按 Eluna 兼容值返回：普通 `0`，战场位 `1`，团队位 `2`，LFG 位 `8`，可能叠加。
+- `group:SetMemberFlag()` 支持 `0x01` 助手开关；`0x02` 主坦克和 `0x04` 主助理当前只支持设置，不支持用 `apply=false` 清空。
+- `group:SendPacket(packet)` 会把 `WorldPacket` 广播给队伍成员；可选参数仍按当前 C++ 入口支持 `ignorePlayersInBg` 和忽略 GUID。
+
+## Guild 方法
+
+可以通过 `player:GetGuild()`、`GetGuildById(id)`、`GetGuildByName(name)` 取得公会对象。
+
+```lua
+guild:GetId()
+guild:GetName()
+guild:GetMOTD()
+guild:GetMotd()
+guild:GetInfo()
+guild:GetLeaderGUID()
+guild:GetLeaderGuid()
+guild:GetLeader()
+guild:GetMemberCount()
+guild:GetMembersCount()
+guild:GetMembers()
+guild:GetRankName(rankId)
+guild:GetRank(player)
+guild:GetOnlineMembers()
+guild:SendMessage(message)
+guild:SendMessage(player, officerOnly, message, language)
+guild:Broadcast(message)
+guild:SetLeader(player)
+guild:SetBankTabText(tabId, text)
+guild:SendPacket(packet)
+guild:SendPacketToRanked(packet, rankId)
+guild:Disband()
+guild:AddMember(player, rankId)
+guild:DeleteMember(player, isDisbanding)
+guild:SetMemberRank(player, rankId)
+guild:SetName(name)
+guild:UpdateMemberData(player, dataId, value)
+guild:MassInviteToEvent(player, minLevel, maxLevel, minRank)
+guild:SwapItems(player, tabId, slotId, destTabId, destSlotId, amount)
+guild:SwapItemsWithInventory(player, toChar, tabId, slotId, bag, slot, amount)
+guild:GetTotalBankMoney()
+guild:GetCreatedDate()
+guild:ResetTimes()
+guild:ModifyBankMoney(amount, add)
+```
+
+说明：
+
+- `guild:GetOnlineMembers()` 和 `guild:GetMembers()` 都返回当前在线的公会成员玩家对象数组。
+- `guild:GetLeaderGUID()` 返回 `ObjectGuid` 对象，需要低位数字时调用 `guid:GetGUIDLow()`。
+- `guild:SendMessage(message)` 会用通知形式发给在线成员；`guild:SendMessage(player, officerOnly, message, language)` 会按公会/官员聊天路径发送。
+- `guild:SetBankTabText(tabId, text)` 在 Turtle 的自定义公会银行里映射为修改标签页名称；`tabId=0` 和 `tabId=1` 都按第一个标签页处理。
+- `guild:GetCreatedDate()` 返回 `YYYYMMDD` 格式数字，例如 `20260506`。
+- `guild:ModifyBankMoney(amount, add)` 直接更新角色库 `guild_bank_money`。如果公会银行插件对象已经在内存中打开，界面刷新可能要等银行重新加载；真实运营脚本里谨慎使用。
+- `guild:SendPacket(packet)` 会向公会成员广播 `WorldPacket`；`guild:SendPacketToRanked(packet, rankId)` 会按公会 rank 发送。
+- `guild:MassInviteToEvent()`、`guild:SwapItems()`、`guild:SwapItemsWithInventory()`、`guild:ResetTimes()` 当前保留方法名兼容，Turtle 1.12 这份核心没有对应的 3.3.5 原生流程。
+
+## Map 方法
+
+`player:GetMap()` 会返回玩家当前地图对象。
+
+```lua
+map:GetId()
+map:GetMapId()
+map:GetInstanceId()
+map:GetName()
+map:GetMapName()
+map:IsDungeon()
+map:IsRaid()
+map:IsBattleground()
+map:IsBattleGround()
+map:IsArena()
+map:IsContinent()
+map:IsEmpty()
+map:IsHeroic()
+map:GetDifficulty()
+map:GetHeight(x, y, z)
+map:GetAreaId(x, y, z)
+map:GetCreatures()
+map:GetCreaturesByAreaId(areaId)
+map:GetPlayers()
+map:GetPlayerCount()
+map:GetPlayersCount()
+map:GetPlayer(guid)
+map:GetCreature(guid)
+map:GetAnyTypeCreature(guid)
+map:GetGameObject(guid)
+map:GetGO(guid)
+map:GetUnit(guid)
+map:GetWorldObject(guid)
+map:GetWorldObjectOrPlayer(guid)
+map:SetWeather(zoneId, weatherType, grade, permanent)
+map:GetInstanceData()
+map:SaveInstanceData()
+```
+
+`map:GetPlayers()` 返回当前地图在线玩家对象数组。
+按 GUID 反查对象只查找当前已经加载在该地图里的对象；玩家可以用 `map:GetWorldObjectOrPlayer(guid)` 从当前地图或在线玩家列表里找。当前 Lua 可返回 `Player`、`Creature`、`GameObject`、`Corpse` 这类对象；动态对象、运输船等还没有专门 userdata，遇到这些类型会返回 `nil`。
+
+Map 兼容说明：
+
+- Turtle 1.12 没有 3.3.5 的英雄/竞技场副本难度系统，所以 `IsHeroic()`、`IsArena()` 当前返回 `false`，`GetDifficulty()` 返回 `0`。
+- `GetHeight(x, y, z)` 读取当前地图地形高度，坐标无效或没有高度时返回 `nil`。
+- `GetAreaId(x, y, z)` 读取当前坐标所在 Area，失败时返回 `0`。
+- `GetCreatures()` / `GetCreaturesByAreaId(areaId)` 当前只枚举副本地图里已经加载的 Creature；普通大陆地图对象仓库没有公开枚举入口，所以会返回空表。
+- `SetWeather(zoneId, weatherType, grade, permanent)` 会直接改变天气。`weatherType` 使用核心天气类型，常见值为 `0` 晴天、`1` 雨、`2` 雪、`3` 沙尘。
+- `GetInstanceData()` 当前返回 `nil`，还没有封装 3.3.5 Eluna 的 InstanceData Lua table。`SaveInstanceData()` 会在当前地图存在实例数据时保存。
+
+## 当前限制
+
+这还不是 3.3.5 Eluna 的全量等价移植，但已经具备实际写服端 Lua 脚本的完整基础闭环：
+
+- 脚本加载、重载和关闭事件。
+- 玩家创建、删除、登录、登出、施法、击杀、被 Creature 击杀、决斗、经验/金币/声望变化、天赋变化、等级变化、聊天、命令、文字表情、保存、副本绑定、Zone/Area/地图变化、队伍掷骰获物、战场逃亡事件。
+- 服务端启动、关闭、Update 事件。
+- NPC 战斗、死亡、重生、AI Update。
+- Creature / GameObject / Item 的任务、Gossip、使用入口。
+- Item DummyEffect、Expire、Remove 事件。
+- 动态 `Spell` 对象和 Prepare / Cast / Cancel 施法事件。
+- `Quest` 对象。
+- `ItemTemplate` 物品模板对象。
+- `CreatureTemplate` 生物模板对象。
+- `GameObjectTemplate` 模板对象。
+- `SpellInfo` 法术模板对象。
+- `SpellCastTargets` 物品使用目标对象。
+- `ObjectGuid` GUID 值对象。
+- `Aura` 光环实例基础对象。
+- 在线玩家列表、在线人数和已加载地图查询。
+- 定时器。
+- 基础数据库查询和执行。
+- Player / Creature / GameObject / Item 常用方法。
+- Creature / GameObject 的 Add / Remove 生命周期事件。
+- GameObject AIUpdate 事件。
+- GameObject Spawn 事件。
+- Creature / GameObject / Item DummyEffect 事件。
+
+仍待继续补齐：
+
+- `WorldPacket` 基础对象封装已完成，客户端入包事件拦截、现有收包包装成 Lua 对象等流程仍待补齐。
+- `ObjectGuid` 已有值对象封装，并已支持 `Map` 按 GUID 反查 Player / Creature / GameObject / Corpse / Unit / WorldObject，以及 `Player` 按 GUID 反查自己背包或银行里的物品。Creature / GameObject / Corpse 不做全局离线查找，需要地图上下文。
+- `Creature`、`Player`、`Corpse`、`SpellInfo`、`Group`、`Guild`、`Map`、动态 `Spell`、通用 `Object` 和通用 `WorldObject` 的 3.3.5 参考方法名已补齐，不过部分接口按 Turtle 1.12 能力做兼容返回。
+- `ItemTemplate` 的 3.3.5 参考方法名已补齐，其中 `GetIcon()` 因 Turtle 1.12 当前未加载图标路径字段而兼容返回空字符串。
+- 3.3.5 专属成就、竞技场点数、铭文/双天赋、LFG 和部分邮件/拍卖/银行/训练师细节目前仍是兼容返回或空入口，后续需要按 Turtle 1.12 的真实系统单独补强。
+- 绑定到具体对象实例上的 Lua 事件目前只有兼容入口，真实对象事件队列还要继续移植。
+- 3.3.5 玩家事件里 `45` 成就完成和 `50` LFG 入队检查没有 Turtle 1.12 等价系统，当前不接入。
+- 载具 Vehicle 对象和真实载具系统在 Turtle 1.12 中不存在，当前只有 `IsOnVehicle` / `GetVehicle` / `GetVehicleKit` 兼容空入口。
+
+## 335 专属功能说明
+
+以下 AzerothCore 3.3.5 功能不能直接照搬到 Turtle 1.12：
+
+- 成就系统相关 API。
+- 载具 Vehicle 真实系统和 Vehicle 对象封装。
+- 竞技场 ArenaTeam 相关 API。
+- 3.3.5 LFG 相关 API。
+- WotLK 才有的部分 Spell / Aura / Map / Instance 结构。
+
+这些需要按 Turtle 1.12 的实际结构重新设计或跳过。
+
+## 最小测试脚本
+
+```lua
+print("Lua loaded")
+
+RegisterPlayerEvent(3, function(event, player)
+    player:SendBroadcastMessage("Lua login hook: " .. player:GetName())
+end)
+
+RegisterPlayerEvent(18, function(event, player, message)
+    if message == "#lua" then
+        player:SendBroadcastMessage("Lua is running on map " .. player:GetMapId())
+        return false
+    end
+end)
+```
+
+测试方法：
+
+1. 确认 `mangosd.conf` 中启用了 `Eluna.Enabled = 1`。
+2. 把 Lua 文件放进 `E:\TurtleBY\lua_scripts`。
+3. 启动 `mangosd.exe`。
+4. 登录游戏并输入 `#lua`。
+
+如果收到 Lua 回复，说明当前 Lua 层已经工作。

@@ -1,0 +1,43 @@
+# Build outputs
+/build*/
+/out/
+/install/
+/dist/
+
+# Visual Studio / CMake generated files
+/.vs/
+/.vscode/
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+
+# Binaries and debug artifacts
+*.exe
+*.dll
+*.lib
+*.pdb
+*.ilk
+*.obj
+*.exp
+*.idb
+*.ipdb
+*.iobj
+
+# Large packaged resources
+*.zip
+*.7z
+*.rar
+*.mpq
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.bak
+*.orig
+DEADJOE
+
+# OS metadata
+Thumbs.db
+desktop.ini
