@@ -93,6 +93,8 @@ constexpr char const* AURA_METATABLE = "Turtle.Aura";
 constexpr char const* SPELL_METATABLE = "Turtle.Spell";
 constexpr char const* SPELLINFO_METATABLE = "Turtle.SpellInfo";
 constexpr char const* SPELLTARGETS_METATABLE = "Turtle.SpellCastTargets";
+constexpr char const* GEMPROPERTIES_METATABLE = "Turtle.GemPropertiesEntry";
+constexpr char const* VEHICLE_METATABLE = "Turtle.Vehicle";
 constexpr char const* WORLDPACKET_METATABLE = "Turtle.WorldPacket";
 constexpr char const* ELUNAQUERY_METATABLE = "Turtle.ElunaQuery";
 constexpr char const* OBJECTGUID_METATABLE = "Turtle.ObjectGuid";
@@ -232,6 +234,16 @@ struct LuaSpellInfo
 struct LuaSpellTargets
 {
     SpellCastTargets const* targets;
+};
+
+struct LuaGemPropertiesEntry
+{
+    uint32 id;
+};
+
+struct LuaVehicle
+{
+    Unit* base;
 };
 
 struct LuaWorldPacket
@@ -492,6 +504,16 @@ SpellCastTargets const* CheckSpellTargets(lua_State* state, int index)
 {
     auto* holder = static_cast<LuaSpellTargets*>(luaL_checkudata(state, index, SPELLTARGETS_METATABLE));
     return holder ? holder->targets : nullptr;
+}
+
+LuaGemPropertiesEntry* CheckGemProperties(lua_State* state, int index)
+{
+    return static_cast<LuaGemPropertiesEntry*>(luaL_checkudata(state, index, GEMPROPERTIES_METATABLE));
+}
+
+LuaVehicle* CheckVehicle(lua_State* state, int index)
+{
+    return static_cast<LuaVehicle*>(luaL_checkudata(state, index, VEHICLE_METATABLE));
 }
 
 WorldPacket* CheckWorldPacket(lua_State* state, int index)
@@ -791,6 +813,15 @@ void PushSpellTargets(lua_State* state, SpellCastTargets const* targets)
     holder->targets = targets;
 
     luaL_getmetatable(state, SPELLTARGETS_METATABLE);
+    lua_setmetatable(state, -2);
+}
+
+void PushGemPropertiesValue(lua_State* state, uint32 id)
+{
+    auto* holder = static_cast<LuaGemPropertiesEntry*>(lua_newuserdata(state, sizeof(LuaGemPropertiesEntry)));
+    holder->id = id;
+
+    luaL_getmetatable(state, GEMPROPERTIES_METATABLE);
     lua_setmetatable(state, -2);
 }
 
@@ -3412,7 +3443,10 @@ int LuaLookupEntry(lua_State* state)
     }
 
     if (dbcName == "GemProperties")
-        return 0;
+    {
+        PushGemPropertiesValue(state, id);
+        return 1;
+    }
 
     return luaL_error(state, "Invalid DBC name: %s", dbcName.c_str());
 }
@@ -5418,6 +5452,22 @@ int PlayerAddComboPoints(lua_State* state)
     return 0;
 }
 
+int PlayerGainSpellComboPoints(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    int8 count = static_cast<int8>(luaL_checkinteger(state, 2));
+
+    if (player)
+    {
+        ObjectGuid comboTargetGuid = player->GetComboTargetGuid();
+        if (!comboTargetGuid.IsEmpty())
+            if (Unit* target = ObjectAccessor::GetUnit(*player, comboTargetGuid))
+                player->AddComboPoints(target, count);
+    }
+
+    return 0;
+}
+
 int PlayerClearComboPoints(lua_State* state)
 {
     Player* player = CheckPlayer(state, 1);
@@ -5466,6 +5516,18 @@ int PlayerIsImmuneToDamage(lua_State* state)
 {
     Player* player = CheckPlayer(state, 1);
     bool immune = player && (player->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE) || player->IsImmuneToDamage(SPELL_SCHOOL_MASK_ALL));
+    lua_pushboolean(state, immune);
+    return 1;
+}
+
+int PlayerIsImmuneToEnvironmentalDamage(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    bool immune = player && (player->IsGameMaster()
+        || player->HasFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_IMMUNE)
+        || player->IsImmuneToDamage(SPELL_SCHOOL_MASK_NORMAL)
+        || player->IsImmuneToDamage(SPELL_SCHOOL_MASK_FIRE)
+        || player->IsImmuneToDamage(SPELL_SCHOOL_MASK_NATURE));
     lua_pushboolean(state, immune);
     return 1;
 }
@@ -5590,6 +5652,32 @@ int PlayerCompatReturnNil(lua_State* state)
 {
     (void)CheckPlayer(state, 1);
     lua_pushnil(state);
+    return 1;
+}
+
+int PlayerCanFlyInZone(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    if (HasLuaArgument(state, 2))
+        (void)luaL_checkinteger(state, 2);
+    if (HasLuaArgument(state, 3))
+        (void)luaL_checkinteger(state, 3);
+    lua_pushboolean(state, player && player->HasUnitState(UNIT_STAT_FLYING_ALLOWED));
+    return 1;
+}
+
+int PlayerIsUsingLfg(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    Group* group = player ? player->GetGroup() : nullptr;
+    lua_pushboolean(state, group && group->isInLFG());
+    return 1;
+}
+
+int PlayerIsNeverVisible(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    lua_pushboolean(state, player && !player->IsGMVisible());
     return 1;
 }
 
@@ -7544,6 +7632,28 @@ int PlayerRemoveQuest(lua_State* state)
     return 0;
 }
 
+int PlayerRemoveRewardedQuest(lua_State* state)
+{
+    (void)CheckPlayer(state, 1);
+    (void)CheckQuestIdValue(state, 2);
+    return 0;
+}
+
+int PlayerKillGOCredit(lua_State* state)
+{
+    (void)CheckPlayer(state, 1);
+    (void)luaL_checkinteger(state, 2);
+    if (HasLuaArgument(state, 3))
+        (void)CheckObjectGuidValue(state, 3);
+    return 0;
+}
+
+int PlayerKilledPlayerCredit(lua_State* state)
+{
+    (void)CheckPlayer(state, 1);
+    return 0;
+}
+
 int PlayerKilledMonsterCredit(lua_State* state)
 {
     Player* player = CheckPlayer(state, 1);
@@ -7586,6 +7696,20 @@ int PlayerSpawnBones(lua_State* state)
     Player* player = CheckPlayer(state, 1);
     if (player)
         player->SpawnCorpseBones();
+    return 0;
+}
+
+int PlayerRemovePet(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    int32 mode = static_cast<int32>(luaL_optinteger(state, 2, PET_SAVE_AS_DELETED));
+
+    if (mode < PET_SAVE_AS_DELETED || (mode > PET_SAVE_LAST_STABLE_SLOT && mode != PET_SAVE_NOT_IN_SLOT && mode != PET_SAVE_REAGENTS))
+        return luaL_argerror(state, 2, "valid PetSaveMode value expected");
+
+    if (player && player->GetPet())
+        player->RemovePet(PetSaveMode(mode));
+
     return 0;
 }
 
@@ -9404,6 +9528,25 @@ int UnitSetStunned(lua_State* state)
                 unit->SetRooted(false);
         }
     }
+    return 0;
+}
+
+int UnitSummonGuardian(lua_State* state)
+{
+    Unit* unit = CheckUnit(state, 1);
+    uint32 entry = static_cast<uint32>(luaL_checkinteger(state, 2));
+    float x = static_cast<float>(luaL_checknumber(state, 3));
+    float y = static_cast<float>(luaL_checknumber(state, 4));
+    float z = static_cast<float>(luaL_checknumber(state, 5));
+    float o = static_cast<float>(luaL_checknumber(state, 6));
+    uint32 despawnTime = static_cast<uint32>(luaL_optinteger(state, 7, 0));
+
+    if (unit)
+    {
+        if (Creature* summon = unit->SummonCreature(entry, x, y, z, o, TEMPSUMMON_TIMED_OR_DEAD_DESPAWN, despawnTime))
+            summon->SetFactionTemplateId(unit->GetFactionTemplateId());
+    }
+
     return 0;
 }
 
@@ -12813,6 +12956,13 @@ int GroupIsLFGGroup(lua_State* state)
     return 1;
 }
 
+int GroupIsBFGroup(lua_State* state)
+{
+    (void)CheckGroup(state, 1);
+    lua_pushboolean(state, false);
+    return 1;
+}
+
 int GroupGetLeaderGUID(lua_State* state)
 {
     Group* group = CheckGroup(state, 1);
@@ -13009,6 +13159,12 @@ int GroupConvertToRaid(lua_State* state)
     Group* group = CheckGroup(state, 1);
     if (group && !group->isRaidGroup())
         group->ConvertToRaid();
+    return 0;
+}
+
+int GroupConvertToLFG(lua_State* state)
+{
+    (void)CheckGroup(state, 1);
     return 0;
 }
 
@@ -15926,6 +16082,15 @@ int SpellInfoIsAffectedBySpellMods(lua_State* state)
     return 1;
 }
 
+int SpellInfoIsAffectedBySpellMod(lua_State* state)
+{
+    CheckSpellInfo(state, 1);
+    if (!lua_isnoneornil(state, 2))
+        CheckSpellInfo(state, 2);
+    lua_pushboolean(state, false);
+    return 1;
+}
+
 int SpellInfoCanPierceImmuneAura(lua_State* state)
 {
     SpellEntry const* spellInfo = CheckSpellInfo(state, 1);
@@ -16203,6 +16368,68 @@ int SpellTargetsIsEmpty(lua_State* state)
     SpellCastTargets const* targets = CheckSpellTargets(state, 1);
     lua_pushboolean(state, !targets || targets->IsEmpty());
     return 1;
+}
+
+int GemPropertiesGetSpellItemEnchantement(lua_State* state)
+{
+    (void)CheckGemProperties(state, 1);
+    lua_pushinteger(state, 0);
+    return 1;
+}
+
+int GemPropertiesGetId(lua_State* state)
+{
+    LuaGemPropertiesEntry* entry = CheckGemProperties(state, 1);
+    lua_pushinteger(state, entry ? entry->id : 0);
+    return 1;
+}
+
+int VehicleIsOnBoard(lua_State* state)
+{
+    (void)CheckVehicle(state, 1);
+    (void)CheckUnit(state, 2);
+    lua_pushboolean(state, false);
+    return 1;
+}
+
+int VehicleGetOwner(lua_State* state)
+{
+    LuaVehicle* vehicle = CheckVehicle(state, 1);
+    if (TurtleLuaEngine* engine = GetEngine(state))
+        engine->PushUnit(vehicle ? vehicle->base : nullptr);
+    else
+        lua_pushnil(state);
+    return 1;
+}
+
+int VehicleGetEntry(lua_State* state)
+{
+    LuaVehicle* vehicle = CheckVehicle(state, 1);
+    lua_pushinteger(state, vehicle && vehicle->base ? vehicle->base->GetEntry() : 0);
+    return 1;
+}
+
+int VehicleGetPassenger(lua_State* state)
+{
+    (void)CheckVehicle(state, 1);
+    (void)luaL_checkinteger(state, 2);
+    lua_pushnil(state);
+    return 1;
+}
+
+int VehicleAddPassenger(lua_State* state)
+{
+    (void)CheckVehicle(state, 1);
+    (void)CheckUnit(state, 2);
+    (void)luaL_checkinteger(state, 3);
+    return 0;
+}
+
+int VehicleRemovePassenger(lua_State* state)
+{
+    (void)CheckVehicle(state, 1);
+    (void)CheckUnit(state, 2);
+    return 0;
 }
 
 int WorldPacketGetOpcode(lua_State* state)
@@ -16877,6 +17104,8 @@ void TurtleLuaEngine::OpenState()
     RegisterSpellMetatable();
     RegisterSpellInfoMetatable();
     RegisterSpellTargetsMetatable();
+    RegisterGemPropertiesMetatable();
+    RegisterVehicleMetatable();
     RegisterWorldPacketMetatable();
     RegisterQueryMetatable();
     RegisterObjectGuidMetatable();
@@ -17279,6 +17508,7 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "SetCanFly", &UnitSetCanFly);
     SetMethod(_state, "DisableMelee", &UnitDisableMelee);
     SetMethod(_state, "SetStunned", &UnitSetStunned);
+    SetMethod(_state, "SummonGuardian", &UnitSummonGuardian);
     SetMethod(_state, "StopSpellCast", &UnitStopSpellCast);
     SetMethod(_state, "InterruptSpell", &UnitInterruptSpell);
     SetMethod(_state, "PerformEmote", &UnitPerformEmote);
@@ -17377,7 +17607,10 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "GetOriginalSubGroup", &PlayerGetOriginalSubGroup);
     SetMethod(_state, "GetGuild", &PlayerGetGuild);
     SetMethod(_state, "GetGuildName", &PlayerGetGuildName);
+    SetMethod(_state, "AddTalent", &PlayerCompatReturnFalse);
     SetMethod(_state, "AddBonusTalent", &PlayerCompatNoop);
+    SetMethod(_state, "BindToInstance", &PlayerCompatNoop);
+    SetMethod(_state, "CanFlyInZone", &PlayerCanFlyInZone);
     SetMethod(_state, "CanTitanGrip", &PlayerCompatReturnFalse);
     SetMethod(_state, "CanUninviteFromGroup", &PlayerCanUninviteFromGroup);
     SetMethod(_state, "EquipItem", &PlayerEquipItem);
@@ -17401,6 +17634,7 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "GetNextRandomRaidMember", &PlayerGetNextRandomRaidMember);
     SetMethod(_state, "GetPhaseMaskForSpawn", &PlayerGetPhaseMaskForSpawn);
     SetMethod(_state, "GetPlayerSettingValue", &PlayerCompatReturnZero);
+    SetMethod(_state, "GetRecruiterId", &PlayerCompatReturnZero);
     SetMethod(_state, "GetShieldBlockValue", &PlayerGetShieldBlockValue);
     SetMethod(_state, "GetSpecsCount", &PlayerGetSpecsCount);
     SetMethod(_state, "GossipAddQuests", &PlayerGossipAddQuests);
@@ -17410,11 +17644,19 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "HasAchieved", &PlayerCompatReturnFalse);
     SetMethod(_state, "HasCasterSpec", &PlayerCompatReturnFalse);
     SetMethod(_state, "HasHealSpec", &PlayerCompatReturnFalse);
+    SetMethod(_state, "HasPendingBind", &PlayerCompatReturnFalse);
     SetMethod(_state, "HasMeleeSpec", &PlayerCompatReturnFalse);
+    SetMethod(_state, "HasReceivedQuestReward", &PlayerGetQuestRewardStatus);
     SetMethod(_state, "HasTalent", &PlayerHasTalent);
     SetMethod(_state, "HasTankSpec", &PlayerCompatReturnFalse);
     SetMethod(_state, "HasTitle", &PlayerHasTitle);
+    SetMethod(_state, "InRandomLfgDungeon", &PlayerCompatReturnFalse);
+    SetMethod(_state, "IsARecruiter", &PlayerCompatReturnFalse);
+    SetMethod(_state, "IsImmuneToEnvironmentalDamage", &PlayerIsImmuneToEnvironmentalDamage);
     SetMethod(_state, "IsInArenaTeam", &PlayerCompatReturnFalse);
+    SetMethod(_state, "IsNeverVisible", &PlayerIsNeverVisible);
+    SetMethod(_state, "IsOutdoorPvPActive", &PlayerCompatReturnFalse);
+    SetMethod(_state, "IsUsingLfg", &PlayerIsUsingLfg);
     SetMethod(_state, "LeaveBattleground", &PlayerLeaveBattleground);
     SetMethod(_state, "LogoutPlayer", &PlayerLogoutPlayer);
     SetMethod(_state, "ModifyArenaPoints", &PlayerCompatNoop);
@@ -17425,6 +17667,7 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "RemoveFromBattlegroundRaid", &PlayerRemoveFromBattlegroundRaid);
     SetMethod(_state, "RemoveFromGroup", &PlayerRemoveFromGroup);
     SetMethod(_state, "ResetAchievements", &PlayerCompatNoop);
+    SetMethod(_state, "RemovePet", &PlayerRemovePet);
     SetMethod(_state, "ResetPetTalents", &PlayerCompatNoop);
     SetMethod(_state, "ResetTalentsCost", &PlayerResetTalentsCost);
     SetMethod(_state, "ResetTypeCooldowns", &PlayerResetTypeCooldowns);
@@ -17450,9 +17693,11 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "SetGuildRank", &PlayerSetGuildRank);
     SetMethod(_state, "SetHonorPoints", &PlayerSetHonorPoints);
     SetMethod(_state, "SetKnownTitle", &PlayerSetKnownTitle);
+    SetMethod(_state, "SetMovement", &PlayerCompatNoop);
     SetMethod(_state, "SetPlayerLock", &PlayerSetPlayerLock);
     SetMethod(_state, "SetSpellPower", &PlayerSetSpellPower);
     SetMethod(_state, "StartTaxi", &PlayerStartTaxi);
+    SetMethod(_state, "SummonPet", &PlayerCompatNoop);
     SetMethod(_state, "SummonPlayer", &PlayerSummonPlayer);
     SetMethod(_state, "UnbindAllInstances", &PlayerUnbindAllInstances);
     SetMethod(_state, "UnbindInstance", &PlayerUnbindInstance);
@@ -17521,6 +17766,7 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "GetComboTarget", &PlayerGetComboTarget);
     SetMethod(_state, "GetComboPoints", &PlayerGetComboPoints);
     SetMethod(_state, "AddComboPoints", &PlayerAddComboPoints);
+    SetMethod(_state, "GainSpellComboPoints", &PlayerGainSpellComboPoints);
     SetMethod(_state, "ClearComboPoints", &PlayerClearComboPoints);
     SetMethod(_state, "GetDrunkValue", &PlayerGetDrunkValue);
     SetMethod(_state, "SetDrunkValue", &PlayerSetDrunkValue);
@@ -17606,6 +17852,7 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "GetSelectedCreature", &PlayerGetSelectedCreature);
     SetMethod(_state, "GetSelectedGameObject", &PlayerGetSelectedGameObject);
     SetMethod(_state, "GetSelectedGO", &PlayerGetSelectedGameObject);
+    SetMethod(_state, "GetNearbyGameObject", &PlayerGetSelectedGameObject);
     SetMethod(_state, "GetSelectedObject", &PlayerGetSelectedObject);
     SetMethod(_state, "GetSelectedWorldObject", &PlayerGetSelectedObject);
     SetMethod(_state, "GetSelectionGUID", &PlayerGetSelectionGUID);
@@ -17635,6 +17882,9 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "FailQuest", &PlayerFailQuest);
     SetMethod(_state, "RemoveQuest", &PlayerRemoveQuest);
     SetMethod(_state, "RemoveActiveQuest", &PlayerRemoveQuest);
+    SetMethod(_state, "RemoveRewardedQuest", &PlayerRemoveRewardedQuest);
+    SetMethod(_state, "KillGOCredit", &PlayerKillGOCredit);
+    SetMethod(_state, "KilledPlayerCredit", &PlayerKilledPlayerCredit);
     SetMethod(_state, "KilledMonsterCredit", &PlayerKilledMonsterCredit);
     SetMethod(_state, "TalkedToCreature", &PlayerTalkedToCreature);
     SetMethod(_state, "AreaExploredOrEventHappens", &PlayerAreaExploredOrEventHappens);
@@ -17900,6 +18150,7 @@ void TurtleLuaEngine::RegisterCreatureMetatable()
     SetMethod(_state, "SetCanFly", &UnitSetCanFly);
     SetMethod(_state, "DisableMelee", &UnitDisableMelee);
     SetMethod(_state, "SetStunned", &UnitSetStunned);
+    SetMethod(_state, "SummonGuardian", &UnitSummonGuardian);
     SetMethod(_state, "StopSpellCast", &UnitStopSpellCast);
     SetMethod(_state, "InterruptSpell", &UnitInterruptSpell);
     SetMethod(_state, "PerformEmote", &UnitPerformEmote);
@@ -18754,6 +19005,7 @@ void TurtleLuaEngine::RegisterGroupMetatable()
     SetMethod(_state, "IsFull", &GroupIsFull);
     SetMethod(_state, "IsBGGroup", &GroupIsBGGroup);
     SetMethod(_state, "IsLFGGroup", &GroupIsLFGGroup);
+    SetMethod(_state, "IsBFGroup", &GroupIsBFGroup);
     SetMethod(_state, "GetLeaderGUID", &GroupGetLeaderGUID);
     SetMethod(_state, "GetLeaderGuid", &GroupGetLeaderGUID);
     SetMethod(_state, "GetLeaderName", &GroupGetLeaderName);
@@ -18775,6 +19027,7 @@ void TurtleLuaEngine::RegisterGroupMetatable()
     SetMethod(_state, "RemoveMember", &GroupRemoveMember);
     SetMethod(_state, "Disband", &GroupDisband);
     SetMethod(_state, "ConvertToRaid", &GroupConvertToRaid);
+    SetMethod(_state, "ConvertToLFG", &GroupConvertToLFG);
     SetMethod(_state, "SetMembersGroup", &GroupSetMembersGroup);
     SetMethod(_state, "SetTargetIcon", &GroupSetTargetIcon);
     SetMethod(_state, "SetMemberFlag", &GroupSetMemberFlag);
@@ -19187,6 +19440,7 @@ void TurtleLuaEngine::RegisterSpellInfoMetatable()
     SetMethod(_state, "IsRangedWeaponSpell", &SpellInfoIsRangedWeaponSpell);
     SetMethod(_state, "IsAutoRepeatRangedSpell", &SpellInfoIsAutoRepeatRangedSpell);
     SetMethod(_state, "IsAffectedBySpellMods", &SpellInfoIsAffectedBySpellMods);
+    SetMethod(_state, "IsAffectedBySpellMod", &SpellInfoIsAffectedBySpellMod);
     SetMethod(_state, "CanPierceImmuneAura", &SpellInfoCanPierceImmuneAura);
     SetMethod(_state, "CanDispelAura", &SpellInfoCanDispelAura);
     SetMethod(_state, "IsSingleTarget", &SpellInfoIsSingleTarget);
@@ -19240,6 +19494,34 @@ void TurtleLuaEngine::RegisterSpellTargetsMetatable()
     SetMethod(_state, "GetDestination", &SpellTargetsGetDestination);
     SetMethod(_state, "GetStringTarget", &SpellTargetsGetStringTarget);
     SetMethod(_state, "IsEmpty", &SpellTargetsIsEmpty);
+    lua_setfield(_state, -2, "__index");
+
+    lua_pop(_state, 1);
+}
+
+void TurtleLuaEngine::RegisterGemPropertiesMetatable()
+{
+    luaL_newmetatable(_state, GEMPROPERTIES_METATABLE);
+
+    lua_newtable(_state);
+    SetMethod(_state, "GetId", &GemPropertiesGetId);
+    SetMethod(_state, "GetSpellItemEnchantement", &GemPropertiesGetSpellItemEnchantement);
+    lua_setfield(_state, -2, "__index");
+
+    lua_pop(_state, 1);
+}
+
+void TurtleLuaEngine::RegisterVehicleMetatable()
+{
+    luaL_newmetatable(_state, VEHICLE_METATABLE);
+
+    lua_newtable(_state);
+    SetMethod(_state, "IsOnBoard", &VehicleIsOnBoard);
+    SetMethod(_state, "GetOwner", &VehicleGetOwner);
+    SetMethod(_state, "GetEntry", &VehicleGetEntry);
+    SetMethod(_state, "GetPassenger", &VehicleGetPassenger);
+    SetMethod(_state, "AddPassenger", &VehicleAddPassenger);
+    SetMethod(_state, "RemovePassenger", &VehicleRemovePassenger);
     lua_setfield(_state, -2, "__index");
 
     lua_pop(_state, 1);

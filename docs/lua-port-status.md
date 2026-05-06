@@ -36,9 +36,9 @@ E:\TurtleBY
 - Creature 3.3.5 参考方法名补齐：本轮把 `CreatureMethods.h` 中 87 个参考方法名全部注册进 `RegisterCreatureMetatable()`；当前差异扫描结果为 `ref=87 target=340 missing=0`。真实接入的接口包括移动能力、精英/世界 Boss/守卫/触发器/平民/阵营领袖判断、任务和法术查询、法术冷却、NPC flags、Unit flags、模板字段、AI 名称、脚本名、脚本 ID、格挡值、归巢点、游荡半径、默认移动类型、当前路径点、拾取归属、仇恨目标列表、AI 选目标、攻击/呼救/协助、可否起手攻击、仇恨开关、进入全区战斗、尸体移除、重生、保存到数据库、变更 entry、死亡状态、反应状态、行走/悬浮、装备槽、禁止呼救/禁止搜索协助等。
 - Creature 1.12 兼容占位：Turtle 1.12 没有 Creature 数字 waypoint path 和 3.3.5 DungeonBoss 独立标记，所以这些接口当前按兼容方式处理：`GetWaypointPath()` 返回 `0`；`IsDungeonBoss()` 暂按 `IsWorldBoss()` 近似。`UNIT_FIELD_FLAGS_2` 已实现为 Lua 可见的运行时值，能支持脚本自己的 `GetUnitFlagsTwo()` / `SetUnitFlagsTwo()` 读写逻辑，但不改变 Turtle 核心单位字段。LootMode 已实现为 Lua 可见的运行时位掩码，能支持脚本自己的 `Get/Set/Add/Remove/Reset/HasLootMode` 逻辑，但不改变 Turtle 核心掉落过滤。`GetCorpseDelay()` 已改为读取 Turtle 当前 `m_corpseDelay` 真实值，`SetDisableGravity(enable)` 当前映射到 Turtle 的 `SetLevitate(enable)` 作为移动兼容，`SetDisableReputationGain(disable)` 已接入击杀声望奖励检查，`IsDamageEnoughForLootingAndReward()` 已接入 Turtle 的玩家/非玩家伤害比例判断。
 - Player 3.3.5 参考方法名补齐：本轮把 `PlayerMethods.h` 里剩余的 82 个缺失方法名全部注册进 `RegisterPlayerMetatable()`；当前差异扫描结果为 `ref=254 target=521 missing=0`。其中真实/近似接入的接口包括 `CanUninviteFromGroup`、`EquipItem`、`GetCompletedQuestsCount`、`GetCorpse`、`GetGossipTextId`、`GetHealthBonusFromStamina`、`GetHonorPoints`、`GetMailCount`、`GetMailItem`、`GetManaBonusFromIntellect`、`GetNextRandomRaidMember`、`GetPhaseMaskForSpawn`、`GetShieldBlockValue`、`GossipAddQuests`、`GossipSendPOI`、`GroupCreate`、`GroupInvite`、`HasTalent`、`HasTitle`、`LeaveBattleground`、`LogoutPlayer`、`ModifyHonorPoints`、`Mute`、`RemovedInsignia`、`RemoveFromBattlegroundRaid`、`RemoveFromGroup`、`ResetTalentsCost`、`ResetTypeCooldowns`、`RunCommand`、`SendAuctionMenu`、`SendGuildInvite`、`SendListInventory`、`SendMovieStart`、`SendQuestTemplate`、`SendShowBank`、`SendSpiritResurrect`、`SendTabardVendorActivate`、`SendTaxiMenu`、`SendTrainerList`、`SetFactionForRace`、`SetGender`、`SetGuildRank`、`SetHonorPoints`、`SetKnownTitle`、`SetPlayerLock`、`StartTaxi`、`SummonPlayer`、`UnbindAllInstances`、`UnbindInstance`、`UnsetKnownTitle`、`Whisper`。本批只做差异扫描和 Lua 示例语法检查，不做完整 CMake 编译。
-- Player 版本兼容占位：`CanTitanGrip`、成就系统、竞技场点数、雕文、双天赋/专精、职责专精判断、冠军战袍阵营、玩家设置、额外天赋点、`SendShowMailBox` 等接口在 Turtle 1.12 里没有对应 3.3.5 数据结构或安全直接入口，因此当前注册为返回 `0` / `false` / `nil` 或 no-op。这样旧 Eluna 脚本至少不会因为函数不存在而报错；后续如果确认 Turtle 有对应自定义系统，再把占位改成真实实现。
+- Player 版本兼容占位：`CanTitanGrip`、成就系统、竞技场点数、雕文、双天赋/专精、职责专精判断、冠军战袍阵营、玩家设置、额外天赋点、`SendShowMailBox`、招募、3.3.5 随机地下城/LFG、`BindToInstance`、`AddTalent`、`SummonPet`、`SetMovement` 等接口在 Turtle 1.12 里没有对应 3.3.5 数据结构或安全直接入口，因此当前注册为返回 `0` / `false` / `nil` 或 no-op。这样旧 Eluna 脚本至少不会因为函数不存在而报错；后续如果确认 Turtle 有对应自定义系统，再把占位改成真实实现。
 - Player 特别说明：`GetCorpse()` 现在返回 `Corpse` 对象或 `nil`，和 3.3.5 Eluna 保持一致；需要尸体 GUID 时可继续调用 `corpse:GetGUID()` / `corpse:GetOwnerGUID()`；`GetTeam()` 按 3.3.5 Eluna 语义返回 TeamId，联盟为 `0`、部落为 `1`；`GetHonorPoints()` 暂时映射到 Turtle 1.12 荣誉 RankPoints；`SendMovieStart()` 暂按 `SendCinematicStart()` 兼容处理；`SendShowMailBox()` 当前是 no-op，因为 1.12 客户端/核心没有 3.3.5 的直接打开邮箱包。
-- Player 分组/技能/法术/任务补充：`GetOriginalGroup`、`GetGroupInvite`、`GetSubGroup`、`GetOriginalSubGroup`、`GetTrader`、`GetInGameTime`、`GetSpells`、`AdvanceSkillsToMax`、`AdvanceSkill`、`AdvanceAllSkills`、`AddComboPoints`、`ClearComboPoints`、`LearnTalent`、`ResetTalents`、`ResetAllCooldowns`、`RemoveArenaSpellCooldowns`、`IsImmuneToDamage`、`SetBindPoint`、`GetHomebind`、`CanCompleteRepeatableQuest`、`GetQuestLevel`、`GetReqKillOrCastCurrentCount`。本批只做差异扫描和 Lua 示例语法检查，未做完整 CMake 编译。
+- Player 分组/技能/法术/任务补充：`GetOriginalGroup`、`GetGroupInvite`、`GetSubGroup`、`GetOriginalSubGroup`、`GetTrader`、`GetInGameTime`、`GetSpells`、`AdvanceSkillsToMax`、`AdvanceSkill`、`AdvanceAllSkills`、`AddComboPoints`、`GainSpellComboPoints`、`ClearComboPoints`、`LearnTalent`、`ResetTalents`、`ResetAllCooldowns`、`RemoveArenaSpellCooldowns`、`IsImmuneToDamage`、`IsImmuneToEnvironmentalDamage`、`CanFlyInZone`、`IsUsingLfg`、`IsNeverVisible`、`SetBindPoint`、`GetHomebind`、`CanCompleteRepeatableQuest`、`GetQuestLevel`、`GetReqKillOrCastCurrentCount`、`HasReceivedQuestReward`、`GetNearbyGameObject`、`KillGOCredit`、`KilledPlayerCredit`、`RemoveRewardedQuest`、`RemovePet`。本批只做差异扫描和 Lua 示例语法检查，未做完整 CMake 编译。
 - Player 法术强度补充：`SetSpellPower(value, apply)` 已按 Turtle 现有 `.modify spellpower` 路径接入；`apply=true` 时用核心自定义法术 `18058` 应用法伤加成，`apply=false` 或不填时移除该加成。
 - Player 任务关联：`HasQuestForGO`、`HasQuestForItem`、`CanShareQuest`、`SetQuestStatus`、`FailQuest`、`RemoveQuest`、`TalkedToCreature`。
 - Player 状态/聊天/战场：`CanSpeak`、`ToggleAFK`、`ToggleDND`、`SetGMVisible`、`SetGMChat`、`SetTaxiCheat`、`SetPvPDeath`、`InArena`、`InBattleground`、`InBattlegroundQueue`、`GetBattlegroundId`、`GetBattlegroundTypeId`。
@@ -47,13 +47,13 @@ E:\TurtleBY
 - WorldObject 通用兼容：`GetLocation`、`GetPhaseMask`、`SetPhaseMask`、`GetPlayersInRange`、`GetCreaturesInRange`、`GetGameObjectsInRange`、`GetNearestPlayer`、`GetNearestCreature`、`GetNearestGameObject`、`GetNearObject`、`GetNearObjects`、`IsInMap`、`IsInRange`、`IsInRange2d`、`IsInRange3d`、`IsInFront`、`IsInBack`、`IsWithinLOS` / `IsWithinLoS`、`SpawnCreature`、`PlayMusic`、`PlayDirectSound`、`PlayDistanceSound`。
 - Unit 通用兼容：`GetPowerPct`、`SetMaxPower`、`ModifyPower`、`GetRaceMask`、`GetClassMask`、`GetCreatureType`、`GetStat`、`GetMovementType`、`GetAttackers`、`GetCreatorGUID`、`GetMinionGUID`、`GetPetGUID`、`GetCritterGUID`、`GetControllerGUID`、`GetControllerGUIDS`、`HealthAbovePct`、`HealthBelowPct`、`IsFullHealth`、`IsInWater`、`IsUnderWater`、`IsMoving`、`IsFlying`、`IsCasting`、`IsPvPFlagged`、`IsStandState`、`IsVendor`、`IsTrainer`、`IsQuestGiver`、`IsGossip`、`IsTaxi`、`IsGuildMaster`、`IsBattleMaster`、`IsBanker`、`IsInnkeeper`、`IsSpiritHealer`、`IsSpiritGuide`、`IsTabardDesigner`、`IsAuctioneer`、`IsArmorer`、`IsServiceProvider`、`IsSpiritService`、`AddUnitState`、`ClearUnitState`、`ClearInCombat`、`StopSpellCast`、`InterruptSpell`、`PerformEmote`、`EmoteState`、`DeMorph`、`RestoreFaction`、`SetNativeDisplayId`、`RestoreDisplayId`、`SetSheath`、`SetRooted`、`SetConfused`、`SetFeared`、`SetFacing`、`SetFacingToObject`、`SetPvP`。
 - Unit 仇恨兼容：`GetThreatList`、`GetThreat`、`AddThreat`、`ModifyThreatPct`、`ModifyThreatPercent`、`ClearThreat`、`ResetAllThreat`、`ClearThreatList`。
-- Unit 状态/移动补充：`IsDying`、`IsCharmed`、`IsAttackingPlayer`、`GetRaceAsString`、`GetClassAsString`、`GetBaseSpellPower`、`SetPowerType`、`SetSpeed`、`SetSpeedRate`、`SetWaterWalk`、`SetCanFly`、`SetStunned`、`DisableMelee`、`SetFFA`、`SetInCombatWith`。
+- Unit 状态/移动补充：`IsDying`、`IsCharmed`、`IsAttackingPlayer`、`GetRaceAsString`、`GetClassAsString`、`GetBaseSpellPower`、`SetPowerType`、`SetSpeed`、`SetSpeedRate`、`SetWaterWalk`、`SetCanFly`、`SetStunned`、`DisableMelee`、`SummonGuardian`、`SetFFA`、`SetInCombatWith`。
 - Unit 移动控制：`MoveStop`、`MoveExpire`、`MoveClear`、`MoveIdle`、`MoveRandom`、`MoveHome`、`MoveFollow`、`MoveChase`、`MoveConfused`、`MoveFleeing`、`MoveTo`、`MoveJump`。
 - Unit 施法兼容：`CastSpell`、`CastCustomSpell`、`CastSpellAoF`、`NearTeleport`。
 - Unit 聊天兼容：`SendUnitSay`、`SendUnitYell`、`SendUnitWhisper`、`SendUnitEmote`、`SendChatMessageToPlayer`。
 - Unit GUID/状态设置：`SetOwnerGUID`、`SetCreatorGUID`、`SetPetGUID`、`SetCritterGUID`、`SetName`、`SetImmuneTo`、`SetSanctuary`。
 - Unit 查询/战斗补充：`GetFriendlyUnitsInRange`、`GetUnfriendlyUnitsInRange`、`GetCurrentSpell`、`HandleStatModifier`、`IsInAccessiblePlaceFor`、`RemoveArenaAuras`、`RemoveBindSightAuras`、`RemoveCharmAuras`、`DealDamage`、`DealHeal`。
-- Unit 载具兼容空入口：`IsOnVehicle`、`GetVehicle`、`GetVehicleKit`。Turtle 1.12 没有真实 Vehicle 系统，所以这些接口只用于兼容旧脚本。
+- Unit 载具兼容空入口：`IsOnVehicle`、`GetVehicle`、`GetVehicleKit`；Vehicle 兼容元表也补了 `IsOnBoard`、`GetOwner`、`GetEntry`、`GetPassenger`、`AddPassenger`、`RemovePassenger`。Turtle 1.12 没有真实 Vehicle 系统，所以这些接口只用于兼容旧脚本。
 - Aura 基础对象封装：`Unit:GetAura`、`Unit:AddAura` 返回 `Aura` 对象，支持读取施法者、持续时间、最大持续时间、光环 ID、层数、拥有者，并支持设置持续时间、最大持续时间、层数和移除。
 - Corpse 对象封装：`Player:GetCorpse()`、`Object:ToCorpse()` 和地图按 GUID 查询现在可以返回 `Corpse` 对象；`CorpseMethods.h` 参考方法差异为 `ref=5 target=67 missing=0`。`SaveToDB()` 对骨骸类型当前做 no-op，避免触发 Turtle 1.12 的骨骸保存断言。
 - Item 兼容补齐：`GetItemLink`、`GetRandomSuffix`、`IsCurrencyToken`、`IsWeaponVellum`、`IsArmorVellum`、`IsRefundExpired`。
@@ -63,7 +63,7 @@ E:\TurtleBY
 - GameObject 兼容补齐：`HasQuest`、`IsTransport`、`IsActive`、`IsDestructible`、`GetLootRecipient`、`GetLootRecipientGroup`、`AddLoot`、`SaveToDB`、`RemoveFromWorld`、`UseDoorOrButton`、`Despawn`、`SetRespawnTime`。
 - ItemTemplate 图标补齐：核心现在加载 `ItemDisplayInfo.dbc` 的物品图标字段，`template:GetIcon()` 会按物品 `DisplayInfoID` 返回真实图标名，例如 `INV_Misc_QuestionMark` 这一类客户端图标路径名。
 - Spell 兼容补齐：`IsAutoRepeat`、`SetAutoRepeat`、`Cast`、`Finish`、`GetDuration`、`GetReagentCost`、`GetTargetDest`。
-- Group 兼容补齐：`GetGUID`、`GetMemberGUID`、`GetGroupType`、`IsLFGGroup`、`IsAssistant`、`SameSubGroup`、`HasFreeSlotSubGroup`、`SetLeader`、`AddMember`、`RemoveMember`、`Disband`、`ConvertToRaid`、`SetMembersGroup`、`SetTargetIcon`、`SetMemberFlag`、`SendPacket`。
+- Group 兼容补齐：`GetGUID`、`GetMemberGUID`、`GetGroupType`、`IsLFGGroup`、`IsBFGroup`、`IsAssistant`、`SameSubGroup`、`HasFreeSlotSubGroup`、`SetLeader`、`AddMember`、`RemoveMember`、`Disband`、`ConvertToRaid`、`ConvertToLFG`、`SetMembersGroup`、`SetTargetIcon`、`SetMemberFlag`、`SendPacket`。
 - Roll 基础对象封装：玩家事件 `56` 的最后一个参数现在返回 `Roll` 对象，不再是 `nil`；可读取掷骰物品、来源 GUID、参与玩家投票、need/greed/pass 统计、物品槽位和投票掩码。
 - Guild 兼容补齐：`GetMembers`、`SetLeader`、`SetBankTabText`、`SendPacket`、`SendPacketToRanked`、`Disband`、`AddMember`、`DeleteMember`、`SetMemberRank`、`SetName`、`UpdateMemberData`、`MassInviteToEvent`、`SwapItems`、`SwapItemsWithInventory`、`GetTotalBankMoney`、`GetCreatedDate`、`ResetTimes`、`ModifyBankMoney`。
 - WorldPacket 基础对象封装和包事件：`CreatePacket(opcode, size)` 现在返回 `WorldPacket` 对象，支持 opcode / size 查询、opcode 修改、基础整数/浮点/GUID/字符串读写；`Player`、`Group`、`Guild`、`WorldObject` 的 `SendPacket` 入口已经可以发送该对象；`RegisterPacketEvent(opcode, 5/7, function)` 已接入客户端入包和服务端出包拦截。
@@ -78,7 +78,7 @@ E:\TurtleBY
 - 全局游戏事件/地图/Gossip 函数补充：新增 `GetActiveGameEvents`、`IsGameEventActive`、`StartGameEvent`、`StopGameEvent`、`GetMapEntrance`、`GetGossipMenuOptionLocale`，均接入 Turtle 当前 `GameEventMgr` / `ObjectMgr` 真实接口。
 - 全局版本兼容占位：新增 `GetOwnerHalaa` / `SetOwnerHalaa`，Turtle 1.12 没有 TBC/WotLK 的纳格兰 Halaa 系统，因此当前只保持脚本兼容，不改变游戏状态。
 - 全局动态出生函数补充：新增 `PerformIngameSpawn`，支持临时/保存的生物和游戏物体出生；临时出生走地图召唤接口，保存出生走 Turtle 现有静态 GUID、保存到 DB、加入网格的路径。
-- 全局 DBC 查询函数补充：新增 `LookupEntry`，当前支持 `Spell` / `SpellEntry` 查询并返回 `SpellInfo` 对象；`GemProperties` 在 Turtle 1.12 中没有对应 DBC，作为兼容名称查询不到时返回空。
+- 全局 DBC 查询函数补充：新增 `LookupEntry`，当前支持 `Spell` / `SpellEntry` 查询并返回 `SpellInfo` 对象；`GemProperties` 在 Turtle 1.12 中没有对应 DBC，当前返回兼容对象，`GetId()` 返回查询 ID，`GetSpellItemEnchantement()` 固定为 `0`。
 - 全局 Group/Guild 事件补充：新增 `RegisterGroupEvent`、`RegisterGuildEvent`、`ClearGroupEvents`、`ClearGuildEvents`，并在 `Group.cpp` / `Guild.cpp` 接入真实触发点。
 - 全局玩家 Gossip 事件补充：新增 `RegisterPlayerGossipEvent`、`ClearPlayerGossipEvents`，并在客户端选择玩家自身 Gossip 菜单项时回调 Lua。
 - 全局唯一 Creature 事件补充：新增 `RegisterUniqueCreatureEvent`、`ClearUniqueCreatureEvents`，按 `ObjectGuid + instanceId + eventId` 绑定单个已经刷出的生物；它和 `RegisterCreatureEvent` 共用现有 Creature 事件触发点，同一事件会先执行 entry 绑定，再执行唯一生物绑定，支持 `shots` 和返回取消函数。
@@ -318,7 +318,7 @@ print(...)
 - `GetItemTemplate(itemId)` / `GetItemPrototype(itemId)` 返回只读物品模板对象，找不到时返回 `nil`。
 - `GetCreatureTemplate(entry)` / `GetCreatureInfo(entry)` 返回只读生物模板对象，找不到时返回 `nil`。
 - `GetGameObjectTemplate(entry)` / `GetGameObjectInfo(entry)` / `GetGOTemplate(entry)` / `GetGOInfo(entry)` 返回只读 GameObject 模板对象，找不到时返回 `nil`。
-- `LookupEntry("Spell", spellId)` / `LookupEntry("SpellEntry", spellId)` 返回只读 `SpellInfo` 对象；`LookupEntry("GemProperties", id)` 在 Turtle 1.12 当前返回空，因为 1.12 没有宝石 DBC 系统。
+- `LookupEntry("Spell", spellId)` / `LookupEntry("SpellEntry", spellId)` 返回只读 `SpellInfo` 对象；`LookupEntry("GemProperties", id)` 返回宝石属性兼容对象，但 Turtle 1.12 没有宝石 DBC 系统，所以 `GetId()` 返回查询 ID，`GetSpellItemEnchantement()` 固定返回 `0`。
 - 数据库同步查询函数返回 `ElunaQuery` 对象，找不到结果时返回 `nil`；对象方法里的列下标按 3.3.5 Eluna 习惯从 `0` 开始。
 - 数据库异步查询函数会在数据库线程完成 SQL 后，把 callback 切回 Lua 世界线程执行；callback 参数为 `ElunaQuery` 或 `nil`，不会在数据库线程里直接调用 Lua。
 - `HttpRequest()` 支持 `GET`、`HEAD`、`POST`、`PUT`、`PATCH`、`DELETE`、`OPTIONS`；callback 参数为 `status, body, headers`。请求失败或 URL 无法解析时 `status` 为 `0`，`body` 中会带错误说明。
@@ -2153,6 +2153,7 @@ spell:IsBreakingStealth()
 spell:IsRangedWeaponSpell()
 spell:IsAutoRepeatRangedSpell()
 spell:IsAffectedBySpellMods()
+spell:IsAffectedBySpellMod(auraSpellInfo)
 spell:CanPierceImmuneAura(auraSpellInfo)
 spell:CanDispelAura(auraSpellInfo)
 spell:IsSingleTarget()
@@ -2178,7 +2179,7 @@ SpellInfo / SpellEntry 兼容说明：
 - 旧 `SpellEntryMethods.h` 的参考方法名也已经并入同一个法术模板对象；当前检查结果为 `ref=92 target=165 missing=0`。
 - `GetSpellName()` 返回所有客户端语言的名称 table；`GetName(locale)` 仍按 SpellInfo 风格返回指定语言字符串。
 - `GetEffectRealPointsPerLevel()`、`GetEffectRadiusIndex()`、`GetEffectValueMultiplier()`、`GetEffectDamageMultiplier()`、`GetEffectBonusMultiplier()` 这些旧 SpellEntry 风格方法在不传下标时返回 1 到 3 的 table，传入 `effectIndex` 时返回单个效果值。
-- `GetAttributesEx5()`、`GetAttributesEx6()`、`GetAttributesEx7()`、`GetFacingCasterFlags()`、`GetCasterAuraStateNot()`、`GetTargetAuraStateNot()`、`GetCasterAuraSpell()`、`GetTargetAuraSpell()`、`GetExcludeCasterAuraSpell()`、`GetExcludeTargetAuraSpell()`、`GetEffectMiscValueB()`、`GetEffectSpellClassMask()`、`GetTotemCategory()`、`GetAreaGroupId()`、`GetRuneCostID()` 是 3.3.5/WotLK 字段，Turtle 1.12 没有对应字段，当前返回 `0` 或全 0 table。
+- `GetAttributesEx5()`、`GetAttributesEx6()`、`GetAttributesEx7()`、`GetFacingCasterFlags()`、`GetCasterAuraStateNot()`、`GetTargetAuraStateNot()`、`GetCasterAuraSpell()`、`GetTargetAuraSpell()`、`GetExcludeCasterAuraSpell()`、`GetExcludeTargetAuraSpell()`、`GetEffectMiscValueB()`、`GetEffectSpellClassMask()`、`GetTotemCategory()`、`GetAreaGroupId()`、`GetRuneCostID()`、`IsAffectedBySpellMod(auraSpellInfo)` 是 3.3.5/WotLK 字段或检查，Turtle 1.12 没有对应字段，当前返回 `0`、`false` 或全 0 table。
 - `CheckLocation()`、`CheckTarget()`、`CheckExplicitTarget()` 当前只做 Turtle 1.12 可直接判断的基础检查，返回核心 `SpellCastResult` 数值；没有完全复刻 3.3.5 的地图区域、条件、脚本目标和物品目标检查。
 - `IsExplicitDiscovery()`、`NeedsToBeTriggeredByCaster()` 目前没有 Turtle 1.12 等价结构，保留方法名并兼容返回 `false`。
 - `GetAuraState()` 先返回 `CasterAuraState`，没有时返回 `TargetAuraState`；1.12 没有 3.3.5 独立 AuraState 封装。
@@ -2695,11 +2696,11 @@ end
 
 - `WorldPacket` 基础对象封装、客户端入包事件和服务端出包事件已接入；未知包事件 `6` 暂不触发，因为 Turtle 队列阶段会直接跳过无处理 opcode。
 - `ObjectGuid` 已有值对象封装，并已支持 `Map` 按 GUID 反查 Player / Creature / GameObject / DynamicObject / Corpse / Unit / WorldObject，以及 `Player` 按 GUID 反查自己背包或银行里的物品。Creature / GameObject / DynamicObject / Corpse 不做全局离线查找，需要地图上下文。
-- `Creature`、`Player`、`Corpse`、`DynamicObject`、`SpellInfo`、`Group`、`Guild`、`Map`、`BattleGround`、`Ticket`、动态 `Spell`、通用 `Object` 和通用 `WorldObject` 的 3.3.5 参考方法名已补齐或基础接入，不过部分接口按 Turtle 1.12 能力做兼容返回。
+- `Creature`、`Player`、`Corpse`、`DynamicObject`、`SpellInfo`、`SpellCastTargets`、`GemPropertiesEntry`、`Vehicle`、`Group`、`Guild`、`Map`、`BattleGround`、`Ticket`、动态 `Spell`、通用 `Object`、通用 `WorldObject` 和通用 `Unit` 的 3.3.5 参考方法名已补齐或基础接入，不过部分接口按 Turtle 1.12 能力做兼容返回。
 - `ItemTemplate` 的 3.3.5 参考方法名已补齐，其中 `GetIcon()` 已接入 `ItemDisplayInfo.dbc` 图标字段；找不到显示信息时才返回空字符串。
 - 3.3.5 专属成就、竞技场点数、铭文/双天赋、LFG 和部分邮件/拍卖/银行/训练师细节目前仍是兼容返回或空入口，后续需要按 Turtle 1.12 的真实系统单独补强。
 - 3.3.5 玩家事件里 `45` 成就完成和 `50` LFG 入队检查没有 Turtle 1.12 等价系统，当前不接入。
-- 载具 Vehicle 对象和真实载具系统在 Turtle 1.12 中不存在，当前只有 `IsOnVehicle` / `GetVehicle` / `GetVehicleKit` 兼容空入口。
+- 真实载具系统在 Turtle 1.12 中不存在，当前 `IsOnVehicle` / `GetVehicle` / `GetVehicleKit` 仍为空入口；Vehicle 元表方法也只是兼容返回。
 - 3.3.5 参考模块的全局公开函数当前已对齐；`RegisterEntryHelper`、`RegisterEventHelper`、`RegisterUniqueHelper`、`DBQueryAsync` 是 Eluna C++ 内部 helper，不是需要暴露给 Lua 脚本的公开 API。`WorldDBQueryAsync`、`CharDBQueryAsync` / `CharacterDBQueryAsync`、`AuthDBQueryAsync` / `LoginDBQueryAsync`、`HttpRequest` 已接入，callback 会回到 Lua 世界线程执行。
 
 ## 335 专属功能说明
@@ -2707,7 +2708,7 @@ end
 以下 AzerothCore 3.3.5 功能不能直接照搬到 Turtle 1.12：
 
 - 成就系统相关 API。
-- 载具 Vehicle 真实系统和 Vehicle 对象封装。
+- 载具 Vehicle 真实系统。
 - 竞技场 ArenaTeam 相关 API。
 - 3.3.5 LFG 相关 API。
 - WotLK 才有的部分 Spell / Aura / Map / Instance 结构。
