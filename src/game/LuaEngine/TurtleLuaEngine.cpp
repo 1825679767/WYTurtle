@@ -135,6 +135,12 @@ PlayerVariables LuaPlayerSettingVariable(char const* source, uint32 index)
     return static_cast<PlayerVariables>(HashLuaPlayerSettingKey(source, index));
 }
 
+void SetLuaPlayerSettingValue(Player* player, char const* source, uint32 index, uint32 value)
+{
+    if (player)
+        player->SetPlayerVariable(LuaPlayerSettingVariable(source, index), std::to_string(value));
+}
+
 uint32 LuaPlayerSettingValue(Player* player, char const* source, uint32 index)
 {
     if (!player)
@@ -5935,6 +5941,60 @@ int PlayerGetActiveSpec(lua_State* state)
     return 1;
 }
 
+int PlayerGetArenaPoints(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    lua_pushinteger(state, LuaPlayerSettingValue(player, "eluna.compat.arena_points", 0));
+    return 1;
+}
+
+int PlayerSetArenaPoints(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    lua_Integer value = luaL_checkinteger(state, 2);
+    SetLuaPlayerSettingValue(player, "eluna.compat.arena_points", 0, value > 0 ? static_cast<uint32>(value) : 0);
+    return 0;
+}
+
+int PlayerModifyArenaPoints(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    int32 amount = static_cast<int32>(luaL_checkinteger(state, 2));
+    uint32 current = LuaPlayerSettingValue(player, "eluna.compat.arena_points", 0);
+    uint32 value = current;
+
+    if (amount < 0)
+    {
+        uint32 remove = static_cast<uint32>(-amount);
+        value = remove >= current ? 0 : current - remove;
+    }
+    else
+    {
+        uint32 add = static_cast<uint32>(amount);
+        value = add > std::numeric_limits<uint32>::max() - current ? std::numeric_limits<uint32>::max() : current + add;
+    }
+
+    SetLuaPlayerSettingValue(player, "eluna.compat.arena_points", 0, value);
+    return 0;
+}
+
+int PlayerGetGlyph(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    uint32 slotIndex = static_cast<uint32>(luaL_checkinteger(state, 2));
+    lua_pushinteger(state, LuaPlayerSettingValue(player, "eluna.compat.glyph", slotIndex));
+    return 1;
+}
+
+int PlayerSetGlyph(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    uint32 glyphId = static_cast<uint32>(luaL_checkinteger(state, 2));
+    uint32 slotIndex = static_cast<uint32>(luaL_checkinteger(state, 3));
+    SetLuaPlayerSettingValue(player, "eluna.compat.glyph", slotIndex, glyphId);
+    return 0;
+}
+
 int PlayerHasTankSpec(lua_State* state)
 {
     Player* player = CheckPlayer(state, 1);
@@ -6032,8 +6092,7 @@ int PlayerUpdatePlayerSetting(lua_State* state)
     uint32 index = static_cast<uint32>(luaL_checkinteger(state, 3));
     uint32 value = static_cast<uint32>(luaL_checkinteger(state, 4));
 
-    if (player)
-        player->SetPlayerVariable(LuaPlayerSettingVariable(source, index), std::to_string(value));
+    SetLuaPlayerSettingValue(player, source, index, value);
 
     return 0;
 }
@@ -18157,14 +18216,14 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "GetAchievementCriteriaProgress", &PlayerCompatReturnNil);
     SetMethod(_state, "GetAchievementPoints", &PlayerCompatReturnZero);
     SetMethod(_state, "GetActiveSpec", &PlayerGetActiveSpec);
-    SetMethod(_state, "GetArenaPoints", &PlayerCompatReturnZero);
+    SetMethod(_state, "GetArenaPoints", &PlayerGetArenaPoints);
     SetMethod(_state, "GetBonusTalentCount", &PlayerGetBonusTalentCount);
     SetMethod(_state, "GetChampioningFaction", &PlayerCompatReturnZero);
     SetMethod(_state, "GetCompletedAchievementsCount", &PlayerCompatReturnZero);
     SetMethod(_state, "GetCompletedQuestsCount", &PlayerGetCompletedQuestsCount);
     SetMethod(_state, "GetCorpse", &PlayerGetCorpse);
     SetMethod(_state, "GetDifficulty", &PlayerGetDifficulty);
-    SetMethod(_state, "GetGlyph", &PlayerCompatReturnZero);
+    SetMethod(_state, "GetGlyph", &PlayerGetGlyph);
     SetMethod(_state, "GetGossipTextId", &PlayerGetGossipTextId);
     SetMethod(_state, "GetHealthBonusFromStamina", &PlayerGetHealthBonusFromStamina);
     SetMethod(_state, "GetHonorPoints", &PlayerGetHonorPoints);
@@ -18199,7 +18258,7 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "IsUsingLfg", &PlayerIsUsingLfg);
     SetMethod(_state, "LeaveBattleground", &PlayerLeaveBattleground);
     SetMethod(_state, "LogoutPlayer", &PlayerLogoutPlayer);
-    SetMethod(_state, "ModifyArenaPoints", &PlayerCompatNoop);
+    SetMethod(_state, "ModifyArenaPoints", &PlayerModifyArenaPoints);
     SetMethod(_state, "ModifyHonorPoints", &PlayerModifyHonorPoints);
     SetMethod(_state, "Mute", &PlayerMute);
     SetMethod(_state, "RemoveBonusTalent", &PlayerRemoveBonusTalent);
@@ -18225,11 +18284,11 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "SendTaxiMenu", &PlayerSendTaxiMenu);
     SetMethod(_state, "SendTrainerList", &PlayerSendTrainerList);
     SetMethod(_state, "SetAchievement", &PlayerCompatNoop);
-    SetMethod(_state, "SetArenaPoints", &PlayerCompatNoop);
+    SetMethod(_state, "SetArenaPoints", &PlayerSetArenaPoints);
     SetMethod(_state, "SetBonusTalentCount", &PlayerSetBonusTalentCount);
     SetMethod(_state, "SetFactionForRace", &PlayerSetFactionForRace);
     SetMethod(_state, "SetGender", &PlayerSetGender);
-    SetMethod(_state, "SetGlyph", &PlayerCompatNoop);
+    SetMethod(_state, "SetGlyph", &PlayerSetGlyph);
     SetMethod(_state, "SetGuildRank", &PlayerSetGuildRank);
     SetMethod(_state, "SetHonorPoints", &PlayerSetHonorPoints);
     SetMethod(_state, "SetKnownTitle", &PlayerSetKnownTitle);
