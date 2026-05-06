@@ -161,6 +161,17 @@ uint32 LuaPlayerSettingValue(Player* player, char const* source, uint32 index)
     return static_cast<uint32>(parsed);
 }
 
+uint32 ClampLuaIntegerToUInt32(lua_Integer value)
+{
+    if (value <= 0)
+        return 0;
+
+    if (static_cast<uint64>(value) > std::numeric_limits<uint32>::max())
+        return std::numeric_limits<uint32>::max();
+
+    return static_cast<uint32>(value);
+}
+
 uint32 CountCurrentTalentSpells(Player* player)
 {
     if (!player)
@@ -5951,26 +5962,25 @@ int PlayerGetArenaPoints(lua_State* state)
 int PlayerSetArenaPoints(lua_State* state)
 {
     Player* player = CheckPlayer(state, 1);
-    lua_Integer value = luaL_checkinteger(state, 2);
-    SetLuaPlayerSettingValue(player, "eluna.compat.arena_points", 0, value > 0 ? static_cast<uint32>(value) : 0);
+    SetLuaPlayerSettingValue(player, "eluna.compat.arena_points", 0, ClampLuaIntegerToUInt32(luaL_checkinteger(state, 2)));
     return 0;
 }
 
 int PlayerModifyArenaPoints(lua_State* state)
 {
     Player* player = CheckPlayer(state, 1);
-    int32 amount = static_cast<int32>(luaL_checkinteger(state, 2));
+    lua_Integer amount = luaL_checkinteger(state, 2);
     uint32 current = LuaPlayerSettingValue(player, "eluna.compat.arena_points", 0);
     uint32 value = current;
 
     if (amount < 0)
     {
-        uint32 remove = static_cast<uint32>(-amount);
+        uint64 remove = static_cast<uint64>(-(amount + 1)) + 1;
         value = remove >= current ? 0 : current - remove;
     }
     else
     {
-        uint32 add = static_cast<uint32>(amount);
+        uint32 add = ClampLuaIntegerToUInt32(amount);
         value = add > std::numeric_limits<uint32>::max() - current ? std::numeric_limits<uint32>::max() : current + add;
     }
 
@@ -5981,7 +5991,7 @@ int PlayerModifyArenaPoints(lua_State* state)
 int PlayerGetGlyph(lua_State* state)
 {
     Player* player = CheckPlayer(state, 1);
-    uint32 slotIndex = static_cast<uint32>(luaL_checkinteger(state, 2));
+    uint32 slotIndex = ClampLuaIntegerToUInt32(luaL_checkinteger(state, 2));
     lua_pushinteger(state, LuaPlayerSettingValue(player, "eluna.compat.glyph", slotIndex));
     return 1;
 }
@@ -5989,8 +5999,8 @@ int PlayerGetGlyph(lua_State* state)
 int PlayerSetGlyph(lua_State* state)
 {
     Player* player = CheckPlayer(state, 1);
-    uint32 glyphId = static_cast<uint32>(luaL_checkinteger(state, 2));
-    uint32 slotIndex = static_cast<uint32>(luaL_checkinteger(state, 3));
+    uint32 glyphId = ClampLuaIntegerToUInt32(luaL_checkinteger(state, 2));
+    uint32 slotIndex = ClampLuaIntegerToUInt32(luaL_checkinteger(state, 3));
     SetLuaPlayerSettingValue(player, "eluna.compat.glyph", slotIndex, glyphId);
     return 0;
 }
