@@ -896,7 +896,8 @@ bool IsWorldObjectValue(lua_State* state, int index)
     return luaL_testudata(state, index, PLAYER_METATABLE)
         || luaL_testudata(state, index, CREATURE_METATABLE)
         || luaL_testudata(state, index, GAMEOBJECT_METATABLE)
-        || luaL_testudata(state, index, CORPSE_METATABLE);
+        || luaL_testudata(state, index, CORPSE_METATABLE)
+        || luaL_testudata(state, index, DYNAMICOBJECT_METATABLE);
 }
 
 Player* CheckOptionalPlayer(lua_State* state, int index)
@@ -4467,8 +4468,17 @@ int WorldObjectIsInBack(lua_State* state)
 int WorldObjectIsWithinLOS(lua_State* state)
 {
     WorldObject* object = CheckWorldObject(state, 1);
-    WorldObject* other = CheckWorldObject(state, 2);
-    lua_pushboolean(state, object && other && object->IsWithinLOSInMap(other));
+    if (IsWorldObjectValue(state, 2))
+    {
+        WorldObject* other = CheckWorldObject(state, 2);
+        lua_pushboolean(state, object && other && object->IsWithinLOSInMap(other));
+        return 1;
+    }
+
+    float x = static_cast<float>(luaL_checknumber(state, 2));
+    float y = static_cast<float>(luaL_checknumber(state, 3));
+    float z = static_cast<float>(luaL_checknumber(state, 4));
+    lua_pushboolean(state, object && object->IsWithinLOS(x, y, z));
     return 1;
 }
 
@@ -8758,6 +8768,25 @@ int UnitRemoveArenaAuras(lua_State* state)
     return 0;
 }
 
+int UnitRemoveBindSightAuras(lua_State* state)
+{
+    Unit* unit = CheckUnit(state, 1);
+    if (unit)
+    {
+        unit->RemoveSpellsCausingAura(SPELL_AURA_BIND_SIGHT);
+        unit->RemoveSpellsCausingAura(SPELL_AURA_FAR_SIGHT);
+    }
+    return 0;
+}
+
+int UnitRemoveCharmAuras(lua_State* state)
+{
+    Unit* unit = CheckUnit(state, 1);
+    if (unit)
+        unit->RemoveCharmAuras();
+    return 0;
+}
+
 int UnitGetVictim(lua_State* state)
 {
     auto* engine = GetEngine(state);
@@ -9318,6 +9347,63 @@ int UnitSetWaterWalk(lua_State* state)
     bool enable = lua_isnoneornil(state, 2) ? true : lua_toboolean(state, 2) != 0;
     if (unit)
         unit->SetWaterWalking(enable);
+    return 0;
+}
+
+int UnitSetCanFly(lua_State* state)
+{
+    Unit* unit = CheckUnit(state, 1);
+    bool enable = lua_isnoneornil(state, 2) ? true : lua_toboolean(state, 2) != 0;
+    if (unit)
+        unit->SetFly(enable);
+    return 0;
+}
+
+int UnitDisableMelee(lua_State* state)
+{
+    Unit* unit = CheckUnit(state, 1);
+    bool apply = lua_isnoneornil(state, 2) ? true : lua_toboolean(state, 2) != 0;
+    if (unit)
+    {
+        if (apply)
+        {
+            unit->AttackStop();
+            unit->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PACIFIED);
+        }
+        else if (!unit->HasAuraType(SPELL_AURA_MOD_PACIFY) && !unit->HasAuraType(SPELL_AURA_MOD_PACIFY_SILENCE))
+            unit->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_PACIFIED);
+    }
+    return 0;
+}
+
+int UnitSetStunned(lua_State* state)
+{
+    Unit* unit = CheckUnit(state, 1);
+    bool apply = lua_isnoneornil(state, 2) ? true : lua_toboolean(state, 2) != 0;
+    if (unit)
+    {
+        if (apply)
+        {
+            unit->SetRooted(true);
+            unit->AddUnitState(UNIT_STAT_STUNNED);
+            unit->SetFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_STUNNED);
+            unit->SetTargetGuid(ObjectGuid());
+            unit->CastStop();
+            unit->InterruptNonMeleeSpells(false);
+        }
+        else
+        {
+            if (unit->HasAuraType(SPELL_AURA_MOD_STUN))
+                return 0;
+
+            unit->ClearUnitState(UNIT_STAT_STUNNED | UNIT_STAT_PENDING_STUNNED);
+            unit->RemoveFlag(UNIT_FIELD_FLAGS, UNIT_FLAG_STUNNED);
+            if (unit->GetVictim() && unit->IsAlive())
+                unit->SetTargetGuid(unit->GetVictim()->GetObjectGuid());
+            if (!unit->HasUnitState(UNIT_STAT_ROOT | UNIT_STAT_PENDING_ROOT))
+                unit->SetRooted(false);
+        }
+    }
     return 0;
 }
 
@@ -17124,6 +17210,8 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "RemoveAurasDueToSpell", &UnitRemoveAura);
     SetMethod(_state, "RemoveAllAuras", &UnitRemoveAllAuras);
     SetMethod(_state, "RemoveArenaAuras", &UnitRemoveArenaAuras);
+    SetMethod(_state, "RemoveBindSightAuras", &UnitRemoveBindSightAuras);
+    SetMethod(_state, "RemoveCharmAuras", &UnitRemoveCharmAuras);
     SetMethod(_state, "GetVictim", &UnitGetVictim);
     SetMethod(_state, "Attack", &UnitAttack);
     SetMethod(_state, "AttackStop", &UnitAttackStop);
@@ -17188,6 +17276,9 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "SetFFA", &UnitSetFFA);
     SetMethod(_state, "SetSanctuary", &UnitSetSanctuary);
     SetMethod(_state, "SetWaterWalk", &UnitSetWaterWalk);
+    SetMethod(_state, "SetCanFly", &UnitSetCanFly);
+    SetMethod(_state, "DisableMelee", &UnitDisableMelee);
+    SetMethod(_state, "SetStunned", &UnitSetStunned);
     SetMethod(_state, "StopSpellCast", &UnitStopSpellCast);
     SetMethod(_state, "InterruptSpell", &UnitInterruptSpell);
     SetMethod(_state, "PerformEmote", &UnitPerformEmote);
@@ -17239,6 +17330,7 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "IsInFront", &WorldObjectIsInFront);
     SetMethod(_state, "IsInBack", &WorldObjectIsInBack);
     SetMethod(_state, "IsWithinLOS", &WorldObjectIsWithinLOS);
+    SetMethod(_state, "IsWithinLoS", &WorldObjectIsWithinLOS);
     SetMethod(_state, "IsInLineOfSight", &WorldObjectIsWithinLOS);
     SetMethod(_state, "IsFriendlyTo", &WorldObjectIsFriendlyTo);
     SetMethod(_state, "IsHostileTo", &WorldObjectIsHostileTo);
@@ -17632,6 +17724,7 @@ void TurtleLuaEngine::RegisterCreatureMetatable()
     SetMethod(_state, "IsInFront", &WorldObjectIsInFront);
     SetMethod(_state, "IsInBack", &WorldObjectIsInBack);
     SetMethod(_state, "IsWithinLOS", &WorldObjectIsWithinLOS);
+    SetMethod(_state, "IsWithinLoS", &WorldObjectIsWithinLOS);
     SetMethod(_state, "IsInLineOfSight", &WorldObjectIsWithinLOS);
     SetMethod(_state, "IsFriendlyTo", &WorldObjectIsFriendlyTo);
     SetMethod(_state, "IsHostileTo", &WorldObjectIsHostileTo);
@@ -17735,6 +17828,8 @@ void TurtleLuaEngine::RegisterCreatureMetatable()
     SetMethod(_state, "RemoveAurasDueToSpell", &UnitRemoveAura);
     SetMethod(_state, "RemoveAllAuras", &UnitRemoveAllAuras);
     SetMethod(_state, "RemoveArenaAuras", &UnitRemoveArenaAuras);
+    SetMethod(_state, "RemoveBindSightAuras", &UnitRemoveBindSightAuras);
+    SetMethod(_state, "RemoveCharmAuras", &UnitRemoveCharmAuras);
     SetMethod(_state, "GetVictim", &UnitGetVictim);
     SetMethod(_state, "Attack", &UnitAttack);
     SetMethod(_state, "AttackStop", &UnitAttackStop);
@@ -17802,6 +17897,9 @@ void TurtleLuaEngine::RegisterCreatureMetatable()
     SetMethod(_state, "SetFFA", &UnitSetFFA);
     SetMethod(_state, "SetSanctuary", &UnitSetSanctuary);
     SetMethod(_state, "SetWaterWalk", &UnitSetWaterWalk);
+    SetMethod(_state, "SetCanFly", &UnitSetCanFly);
+    SetMethod(_state, "DisableMelee", &UnitDisableMelee);
+    SetMethod(_state, "SetStunned", &UnitSetStunned);
     SetMethod(_state, "StopSpellCast", &UnitStopSpellCast);
     SetMethod(_state, "InterruptSpell", &UnitInterruptSpell);
     SetMethod(_state, "PerformEmote", &UnitPerformEmote);
@@ -18014,6 +18112,7 @@ void TurtleLuaEngine::RegisterGameObjectMetatable()
     SetMethod(_state, "IsInFront", &WorldObjectIsInFront);
     SetMethod(_state, "IsInBack", &WorldObjectIsInBack);
     SetMethod(_state, "IsWithinLOS", &WorldObjectIsWithinLOS);
+    SetMethod(_state, "IsWithinLoS", &WorldObjectIsWithinLOS);
     SetMethod(_state, "IsInLineOfSight", &WorldObjectIsWithinLOS);
     SetMethod(_state, "IsFriendlyTo", &WorldObjectIsFriendlyTo);
     SetMethod(_state, "IsHostileTo", &WorldObjectIsHostileTo);
@@ -18134,6 +18233,7 @@ void TurtleLuaEngine::RegisterCorpseMetatable()
     SetMethod(_state, "IsInFront", &WorldObjectIsInFront);
     SetMethod(_state, "IsInBack", &WorldObjectIsInBack);
     SetMethod(_state, "IsWithinLOS", &WorldObjectIsWithinLOS);
+    SetMethod(_state, "IsWithinLoS", &WorldObjectIsWithinLOS);
     SetMethod(_state, "IsInLineOfSight", &WorldObjectIsWithinLOS);
     SetMethod(_state, "IsFriendlyTo", &WorldObjectIsFriendlyTo);
     SetMethod(_state, "IsHostileTo", &WorldObjectIsHostileTo);
@@ -18227,6 +18327,7 @@ void TurtleLuaEngine::RegisterDynamicObjectMetatable()
     SetMethod(_state, "IsInFront", &WorldObjectIsInFront);
     SetMethod(_state, "IsInBack", &WorldObjectIsInBack);
     SetMethod(_state, "IsWithinLOS", &WorldObjectIsWithinLOS);
+    SetMethod(_state, "IsWithinLoS", &WorldObjectIsWithinLOS);
     SetMethod(_state, "IsInLineOfSight", &WorldObjectIsWithinLOS);
     SetMethod(_state, "IsFriendlyTo", &WorldObjectIsFriendlyTo);
     SetMethod(_state, "IsHostileTo", &WorldObjectIsHostileTo);

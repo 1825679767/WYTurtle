@@ -44,15 +44,15 @@ E:\TurtleBY
 - Player 状态/聊天/战场：`CanSpeak`、`ToggleAFK`、`ToggleDND`、`SetGMVisible`、`SetGMChat`、`SetTaxiCheat`、`SetPvPDeath`、`InArena`、`InBattleground`、`InBattlegroundQueue`、`GetBattlegroundId`、`GetBattlegroundTypeId`。
 - Player 物品/耐久/击杀：`CanUseItem`、`CanEquipItem`、`DurabilityRepair`、`DurabilityRepairAll`、`DurabilityLoss`、`DurabilityLossAll`、`DurabilityPointsLoss`、`DurabilityPointsLossAll`、`DurabilityPointLossForEquipSlot`、`GetLifetimeKills`、`SetLifetimeKills`、`AddLifetimeKills`、`RemoveLifetimeKills`、`KillPlayer`、`SpawnBones`。
 - Object 通用兼容：补齐 `GetInt32Value`、`GetFloatValue`、`GetByteValue`、`GetUInt16Value`、`GetUInt64Value`、`SetInt32Value`、`UpdateUInt32Value`、`SetFloatValue`、`SetByteValue`、`SetUInt16Value`、`SetInt16Value`、`SetUInt64Value` 和 `ToPlayer` / `ToCreature` / `ToUnit` / `ToGameObject` / `ToCorpse` / `ToDynamicObject`。
-- WorldObject 通用兼容：`GetLocation`、`GetPhaseMask`、`SetPhaseMask`、`GetPlayersInRange`、`GetCreaturesInRange`、`GetGameObjectsInRange`、`GetNearestPlayer`、`GetNearestCreature`、`GetNearestGameObject`、`GetNearObject`、`GetNearObjects`、`IsInMap`、`IsInRange`、`IsInRange2d`、`IsInRange3d`、`IsInFront`、`IsInBack`、`SpawnCreature`、`PlayMusic`、`PlayDirectSound`、`PlayDistanceSound`。
+- WorldObject 通用兼容：`GetLocation`、`GetPhaseMask`、`SetPhaseMask`、`GetPlayersInRange`、`GetCreaturesInRange`、`GetGameObjectsInRange`、`GetNearestPlayer`、`GetNearestCreature`、`GetNearestGameObject`、`GetNearObject`、`GetNearObjects`、`IsInMap`、`IsInRange`、`IsInRange2d`、`IsInRange3d`、`IsInFront`、`IsInBack`、`IsWithinLOS` / `IsWithinLoS`、`SpawnCreature`、`PlayMusic`、`PlayDirectSound`、`PlayDistanceSound`。
 - Unit 通用兼容：`GetPowerPct`、`SetMaxPower`、`ModifyPower`、`GetRaceMask`、`GetClassMask`、`GetCreatureType`、`GetStat`、`GetMovementType`、`GetAttackers`、`GetCreatorGUID`、`GetMinionGUID`、`GetPetGUID`、`GetCritterGUID`、`GetControllerGUID`、`GetControllerGUIDS`、`HealthAbovePct`、`HealthBelowPct`、`IsFullHealth`、`IsInWater`、`IsUnderWater`、`IsMoving`、`IsFlying`、`IsCasting`、`IsPvPFlagged`、`IsStandState`、`IsVendor`、`IsTrainer`、`IsQuestGiver`、`IsGossip`、`IsTaxi`、`IsGuildMaster`、`IsBattleMaster`、`IsBanker`、`IsInnkeeper`、`IsSpiritHealer`、`IsSpiritGuide`、`IsTabardDesigner`、`IsAuctioneer`、`IsArmorer`、`IsServiceProvider`、`IsSpiritService`、`AddUnitState`、`ClearUnitState`、`ClearInCombat`、`StopSpellCast`、`InterruptSpell`、`PerformEmote`、`EmoteState`、`DeMorph`、`RestoreFaction`、`SetNativeDisplayId`、`RestoreDisplayId`、`SetSheath`、`SetRooted`、`SetConfused`、`SetFeared`、`SetFacing`、`SetFacingToObject`、`SetPvP`。
 - Unit 仇恨兼容：`GetThreatList`、`GetThreat`、`AddThreat`、`ModifyThreatPct`、`ModifyThreatPercent`、`ClearThreat`、`ResetAllThreat`、`ClearThreatList`。
-- Unit 状态/移动补充：`IsDying`、`IsCharmed`、`IsAttackingPlayer`、`GetRaceAsString`、`GetClassAsString`、`GetBaseSpellPower`、`SetPowerType`、`SetSpeed`、`SetSpeedRate`、`SetWaterWalk`、`SetFFA`、`SetInCombatWith`。
+- Unit 状态/移动补充：`IsDying`、`IsCharmed`、`IsAttackingPlayer`、`GetRaceAsString`、`GetClassAsString`、`GetBaseSpellPower`、`SetPowerType`、`SetSpeed`、`SetSpeedRate`、`SetWaterWalk`、`SetCanFly`、`SetStunned`、`DisableMelee`、`SetFFA`、`SetInCombatWith`。
 - Unit 移动控制：`MoveStop`、`MoveExpire`、`MoveClear`、`MoveIdle`、`MoveRandom`、`MoveHome`、`MoveFollow`、`MoveChase`、`MoveConfused`、`MoveFleeing`、`MoveTo`、`MoveJump`。
 - Unit 施法兼容：`CastSpell`、`CastCustomSpell`、`CastSpellAoF`、`NearTeleport`。
 - Unit 聊天兼容：`SendUnitSay`、`SendUnitYell`、`SendUnitWhisper`、`SendUnitEmote`、`SendChatMessageToPlayer`。
 - Unit GUID/状态设置：`SetOwnerGUID`、`SetCreatorGUID`、`SetPetGUID`、`SetCritterGUID`、`SetName`、`SetImmuneTo`、`SetSanctuary`。
-- Unit 查询/战斗补充：`GetFriendlyUnitsInRange`、`GetUnfriendlyUnitsInRange`、`GetCurrentSpell`、`HandleStatModifier`、`IsInAccessiblePlaceFor`、`RemoveArenaAuras`、`DealDamage`、`DealHeal`。
+- Unit 查询/战斗补充：`GetFriendlyUnitsInRange`、`GetUnfriendlyUnitsInRange`、`GetCurrentSpell`、`HandleStatModifier`、`IsInAccessiblePlaceFor`、`RemoveArenaAuras`、`RemoveBindSightAuras`、`RemoveCharmAuras`、`DealDamage`、`DealHeal`。
 - Unit 载具兼容空入口：`IsOnVehicle`、`GetVehicle`、`GetVehicleKit`。Turtle 1.12 没有真实 Vehicle 系统，所以这些接口只用于兼容旧脚本。
 - Aura 基础对象封装：`Unit:GetAura`、`Unit:AddAura` 返回 `Aura` 对象，支持读取施法者、持续时间、最大持续时间、光环 ID、层数、拥有者，并支持设置持续时间、最大持续时间、层数和移除。
 - Corpse 对象封装：`Player:GetCorpse()`、`Object:ToCorpse()` 和地图按 GUID 查询现在可以返回 `Corpse` 对象；`CorpseMethods.h` 参考方法差异为 `ref=5 target=67 missing=0`。`SaveToDB()` 对骨骸类型当前做 no-op，避免触发 Turtle 1.12 的骨骸保存断言。
@@ -1009,6 +1009,9 @@ obj:IsInRange3d(x, y, z, minRange, maxRange)
 obj:IsInFront(other, arc)
 obj:IsInBack(other, arc)
 obj:IsWithinLOS(other)
+obj:IsWithinLOS(x, y, z)
+obj:IsWithinLoS(other)
+obj:IsWithinLoS(x, y, z)
 obj:IsFriendlyTo(other)
 obj:IsHostileTo(other)
 obj:GetPlayersInRange(range, hostile, dead)
@@ -1138,6 +1141,8 @@ player:AddAura(spellId, caster)
 player:RemoveAura(spellId)
 player:RemoveAllAuras()
 player:RemoveArenaAuras(onleave)
+player:RemoveBindSightAuras()
+player:RemoveCharmAuras()
 player:GetVictim()
 player:GetSelection()
 player:GetSelectedUnit()
@@ -1216,6 +1221,9 @@ player:SetPvP(apply)
 player:SetFFA(apply)
 player:SetSanctuary(apply)
 player:SetWaterWalk(enable)
+player:SetCanFly(enable)
+player:DisableMelee(apply)
+player:SetStunned(apply)
 player:StopSpellCast(spellId)
 player:GetCurrentSpell(spellType)
 player:InterruptSpell(spellType, delayed)
@@ -1253,7 +1261,7 @@ player:GetCharmerOrOwnerGUID()
 `SetOwnerGUID`、`SetCreatorGUID`、`SetPetGUID` 接收本适配层 `ObjectGuid` 对象；`SetCritterGUID` 在 Turtle 1.12 没有对应核心字段，当前只是兼容入口，不改变实际状态。
 `SetName(name)` 当前只会修改 Player 内存名，Creature 没有安全的运行时改名入口；不建议用于正式改名流程。
 `SetImmuneTo(mechanic, apply)` 映射到核心 `IMMUNITY_MECHANIC`；`SetSanctuary(apply)` 会修改 1.12 对应字节标记，Player 还会同步 `PLAYER_FLAGS_SANCTUARY`。
-`SetWaterWalk(enable)`、`SetFFA(apply)`、`SetInCombatWith(enemy)` 都会直接改变单位状态，建议只在明确的事件流程里使用。
+`SetWaterWalk(enable)`、`SetCanFly(enable)`、`SetStunned(apply)`、`DisableMelee(apply)`、`SetFFA(apply)`、`SetInCombatWith(enemy)` 都会直接改变单位状态，建议只在明确的事件流程里使用。`SetCanFly` 映射到 Turtle 的 `SetFly` 移动标记；`DisableMelee` 用 `UNIT_FLAG_PACIFIED` 阻止单位继续起手攻击，取消时会保留核心光环带来的 pacify 标记；`SetStunned(false)` 也会保留真实眩晕光环还在生效的状态。
 `InterruptSpell(spellType, delayed)` 使用 Eluna 外部参数：`0` 近战、`1` 通用、`2` 引导、`3` 自动射击。
 `GetStat(stat)` 的 `stat` 是 `0..4`，对应力量、敏捷、耐力、智力、精神。
 `HandleStatModifier(stat, modifierType, value, apply)` 同样只支持 `stat` 为 `0..4`，会直接套用或移除对应属性修正；`modifierType` 使用 Turtle/MaNGOS 的 `UnitModifierType`。
@@ -1265,6 +1273,7 @@ Turtle 1.12 没有真实 Vehicle 系统，所以 `IsOnVehicle()` 固定返回 `f
 `AddAura(spellId, caster)` 当前沿用本适配层已有参数顺序：给当前单位添加光环，第三个参数是可选施法者；返回值已经从布尔值升级为 `Aura` 对象，失败时返回 `nil`。
 `RemoveAllAuras()` 会移除单位身上的全部光环，天赋、种族、被动光环也可能受影响，脚本里要谨慎使用。
 `RemoveArenaAuras(onleave)` 会清理竞技场相关光环，`onleave` 默认 `false`。它会改变角色状态，不要在普通查询命令里随手调用。
+`RemoveBindSightAuras()` 会移除 `BIND_SIGHT` 和 `FAR_SIGHT` 相关光环；`RemoveCharmAuras()` 会移除核心魅惑、控制和群体魅惑光环。
 `DealDamage` / `DealHeal` 会产生真实战斗效果，包含伤害、治疗、吸收/抗性、战斗日志等核心路径；建议只在明确的战斗事件或技能逻辑里使用。
 仇恨接口主要给 Creature 使用；Player 也挂了同名方法用于兼容旧脚本，但玩家通常没有仇恨列表，所以多数调用会返回 `nil`、`0` 或没有实际效果。
 `GetThreatList()` 返回当前仇恨列表里的单位数组；没有仇恨列表或单位不在地图中时返回 `nil`。`GetThreat(victim)` 返回对指定目标的仇恨值。
