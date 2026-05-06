@@ -1260,7 +1260,7 @@ int LuaGetGUIDEntry(lua_State* state)
 int LuaSendWorldMessage(lua_State* state)
 {
     char const* message = luaL_checkstring(state, 1);
-    sWorld.SendGlobalText(message, nullptr);
+    sWorld.SendServerMessage(SERVER_MSG_CUSTOM, message);
     return 0;
 }
 
@@ -2279,19 +2279,55 @@ int WorldObjectGetNearObjects(lua_State* state)
 
 int WorldObjectRegisterEvent(lua_State* state)
 {
+    WorldObject* object = CheckWorldObject(state, 1);
     luaL_checktype(state, 2, LUA_TFUNCTION);
-    lua_pushnil(state);
+
+    uint32 minDelay = 0;
+    uint32 maxDelay = 0;
+    if (lua_istable(state, 3))
+    {
+        lua_rawgeti(state, 3, 1);
+        minDelay = static_cast<uint32>(luaL_checkinteger(state, -1));
+        lua_rawgeti(state, 3, 2);
+        maxDelay = static_cast<uint32>(luaL_checkinteger(state, -1));
+        lua_pop(state, 2);
+    }
+    else
+        minDelay = maxDelay = static_cast<uint32>(luaL_checkinteger(state, 3));
+
+    if (minDelay > maxDelay)
+        return luaL_argerror(state, 3, "min is bigger than max delay");
+
+    uint32 repeats = static_cast<uint32>(luaL_optinteger(state, 4, 1));
+    TurtleLuaEngine* engine = GetEngine(state);
+    if (!engine || !object || !object->IsInWorld())
+    {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    lua_pushvalue(state, 2);
+    int functionRef = luaL_ref(state, LUA_REGISTRYINDEX);
+    lua_pushinteger(state, engine->CreateTimedEvent(functionRef, minDelay, maxDelay, repeats, object));
     return 1;
 }
 
 int WorldObjectRemoveEventById(lua_State* state)
 {
-    luaL_checkinteger(state, 2);
+    WorldObject* object = CheckWorldObject(state, 1);
+    uint32 eventId = static_cast<uint32>(luaL_checkinteger(state, 2));
+    TurtleLuaEngine* engine = GetEngine(state);
+    if (engine && object)
+        engine->RemoveTimedEventForObject(eventId, object->GetObjectGuid());
     return 0;
 }
 
-int WorldObjectRemoveEvents(lua_State* /*state*/)
+int WorldObjectRemoveEvents(lua_State* state)
 {
+    WorldObject* object = CheckWorldObject(state, 1);
+    TurtleLuaEngine* engine = GetEngine(state);
+    if (engine && object)
+        engine->RemoveTimedEventsForObject(object->GetObjectGuid());
     return 0;
 }
 
@@ -15716,9 +15752,41 @@ uint32 TurtleLuaEngine::CreateTimedEvent(int functionRef, uint32 delay, uint32 r
         _nextTimedEventId = 1;
 
     event.functionRef = functionRef;
-    event.delay = delay ? delay : 1;
+    event.minDelay = delay ? delay : 1;
+    event.maxDelay = event.minDelay;
+    event.delay = event.minDelay;
     event.elapsed = 0;
     event.remaining = repeats ? static_cast<int32>(repeats) : -1;
+    event.hasObject = false;
+    event.objectGuid.Clear();
+    event.mapId = 0;
+    event.instanceId = 0;
+    _timedEvents.push_back(event);
+    return event.id;
+}
+
+uint32 TurtleLuaEngine::CreateTimedEvent(int functionRef, uint32 minDelay, uint32 maxDelay, uint32 repeats, WorldObject* object)
+{
+    TimedEvent event;
+    event.id = _nextTimedEventId++;
+    if (_nextTimedEventId == 0)
+        _nextTimedEventId = 1;
+
+    event.functionRef = functionRef;
+    event.minDelay = minDelay;
+    event.maxDelay = maxDelay;
+    if (event.minDelay == 0 && event.maxDelay == 0)
+    {
+        event.minDelay = 1;
+        event.maxDelay = 1;
+    }
+    event.delay = GenerateTimedEventDelay(event);
+    event.elapsed = 0;
+    event.remaining = repeats ? static_cast<int32>(repeats) : -1;
+    event.hasObject = object != nullptr;
+    event.objectGuid = object ? object->GetObjectGuid() : ObjectGuid();
+    event.mapId = object ? object->GetMapId() : 0;
+    event.instanceId = object ? object->GetInstanceId() : 0;
     _timedEvents.push_back(event);
     return event.id;
 }
@@ -15738,6 +15806,67 @@ bool TurtleLuaEngine::RemoveTimedEvent(uint32 eventId)
 
     _timedEvents.erase(itr);
     return true;
+}
+
+bool TurtleLuaEngine::RemoveTimedEventForObject(uint32 eventId, ObjectGuid const& objectGuid)
+{
+    auto itr = std::find_if(_timedEvents.begin(), _timedEvents.end(), [eventId, &objectGuid](TimedEvent const& event)
+    {
+        return event.id == eventId && event.hasObject && event.objectGuid == objectGuid;
+    });
+
+    if (itr == _timedEvents.end())
+        return false;
+
+    if (_state)
+        luaL_unref(_state, LUA_REGISTRYINDEX, itr->functionRef);
+
+    _timedEvents.erase(itr);
+    return true;
+}
+
+uint32 TurtleLuaEngine::RemoveTimedEventsForObject(ObjectGuid const& objectGuid)
+{
+    uint32 removed = 0;
+    for (auto itr = _timedEvents.begin(); itr != _timedEvents.end();)
+    {
+        if (itr->hasObject && itr->objectGuid == objectGuid)
+        {
+            if (_state)
+                luaL_unref(_state, LUA_REGISTRYINDEX, itr->functionRef);
+            itr = _timedEvents.erase(itr);
+            ++removed;
+        }
+        else
+            ++itr;
+    }
+
+    return removed;
+}
+
+uint32 TurtleLuaEngine::GenerateTimedEventDelay(TimedEvent const& event) const
+{
+    uint32 delay = event.minDelay == event.maxDelay ? event.minDelay : urand(event.minDelay, event.maxDelay);
+    return delay ? delay : 1;
+}
+
+WorldObject* TurtleLuaEngine::ResolveTimedEventObject(TimedEvent const& event)
+{
+    if (!event.hasObject || event.objectGuid.IsEmpty())
+        return nullptr;
+
+    if (event.objectGuid.IsPlayer())
+    {
+        Player* player = ObjectAccessor::FindPlayer(event.objectGuid);
+        return player && player->IsInWorld() ? player : nullptr;
+    }
+
+    Map* map = sMapMgr.FindMap(event.mapId, event.instanceId);
+    if (!map)
+        return nullptr;
+
+    WorldObject* object = map->GetWorldObjectOrPlayer(event.objectGuid);
+    return object && object->IsInWorld() ? object : nullptr;
 }
 
 void TurtleLuaEngine::PushPlayer(Player* player)
@@ -16010,14 +16139,29 @@ void TurtleLuaEngine::UpdateTimedEvents(uint32 diff)
         int functionRef = event.functionRef;
         uint32 delay = event.delay;
         int32 remaining = event.remaining;
+        bool hasObject = event.hasObject;
+        WorldObject* boundObject = nullptr;
+
+        if (hasObject)
+        {
+            boundObject = ResolveTimedEventObject(event);
+            if (!boundObject)
+            {
+                luaL_unref(_state, LUA_REGISTRYINDEX, functionRef);
+                _timedEvents.erase(itr);
+                continue;
+            }
+        }
 
         lua_rawgeti(_state, LUA_REGISTRYINDEX, functionRef);
         lua_pushinteger(_state, eventId);
         lua_pushinteger(_state, delay);
         lua_pushinteger(_state, remaining < 0 ? 0 : remaining);
+        if (hasObject)
+            PushWorldObjectValue(_state, this, boundObject);
 
         bool remove = false;
-        if (lua_pcall(_state, 3, 0, 0) != LUA_OK)
+        if (lua_pcall(_state, hasObject ? 4 : 3, 0, 0) != LUA_OK)
         {
             LogError("lua timed event");
             lua_pop(_state, 1);
@@ -16043,7 +16187,11 @@ void TurtleLuaEngine::UpdateTimedEvents(uint32 diff)
             _timedEvents.erase(itr);
         }
         else
+        {
             itr->remaining = remaining;
+            itr->delay = GenerateTimedEventDelay(*itr);
+            itr->elapsed = 0;
+        }
     }
 }
 

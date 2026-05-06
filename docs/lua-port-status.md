@@ -183,6 +183,7 @@ print(...)
 - `CreatePacket(opcode, size)` 创建一个 Lua 持有的 `WorldPacket` 对象；`opcode` 必须小于 Turtle 1.12 的 `NUM_MSG_TYPES`，`size` 是预留字节大小。
 - `GetPlayerGUID(lowguid)`、`GetItemGUID(lowguid)`、`GetObjectGUID(lowguid, entry)`、`GetUnitGUID(lowguid, entry)` 是 3.3.5 Eluna 风格的 GUID 构造函数；注意 `GetObjectGUID` / `GetUnitGUID` 的参数顺序是低位 GUID 在前、entry 在后。
 - `GetGUIDLow(guid)`、`GetGUIDType(guid)`、`GetGUIDEntry(guid)` 用于从 `ObjectGuid` 里拆出低位、HighGuid 类型和 entry。
+- `SendWorldMessage(message)` 已按 3.3.5 Eluna 行为发送服务器消息；Turtle 1.12 中使用等价的 `SERVER_MSG_CUSTOM`，不再走普通 `CHAT_MSG_SYSTEM` 聊天包。
 - `GetItemTemplate(itemId)` / `GetItemPrototype(itemId)` 返回只读物品模板对象，找不到时返回 `nil`。
 - `GetCreatureTemplate(entry)` / `GetCreatureInfo(entry)` 返回只读生物模板对象，找不到时返回 `nil`。
 - `GetGameObjectTemplate(entry)` / `GetGameObjectInfo(entry)` / `GetGOTemplate(entry)` / `GetGOInfo(entry)` 返回只读 GameObject 模板对象，找不到时返回 `nil`。
@@ -740,7 +741,7 @@ obj:SendPacket(packet)
 `GetNearestCreature` / `GetNearestGameObject` 使用 Eluna 参数顺序，旧的 `FindNearestCreature(entry, range, alive)` 和 `FindNearestGameObject(entry, range)` 仍然保留。
 `GetNearObject` / `GetNearObjects` 当前枚举已加载的 `Player`、`Creature`、`GameObject`；`Corpse` 对象已可由玩家、地图和 `ToCorpse()` 等路径取得。
 `hostile` 参数约定为 `0` 不过滤、`1` 敌对、`2` 友方；`dead` 参数约定为 `0` 不过滤、`1` 存活、`2` 死亡。
-`RegisterEvent` / `RemoveEventById` / `RemoveEvents` 已作为对象方法名接入，但对象绑定事件队列还没有真正移植；`RegisterEvent` 当前返回 `nil`，删除函数为空操作。`SendPacket` 现在可以发送由 `CreatePacket()` 创建的 `WorldPacket`。
+`RegisterEvent` / `RemoveEventById` / `RemoveEvents` 已实现对象绑定定时事件。回调参数为 `(eventId, delay, repeats, object)`；`delay` 可以是毫秒数，也可以是 `{minDelay, maxDelay}` 随机延迟表；`repeats = 0` 表示无限重复。绑定对象消失、退出世界或玩家下线后，对应事件会自动移除。当前实现由 Lua 引擎统一更新，不完全模拟 3.3.5 Eluna 中 Creature/GameObject 只有进入可见范围才计时的细节。`SendPacket` 现在可以发送由 `CreatePacket()` 创建的 `WorldPacket`。
 
 ## Player 方法
 
@@ -2148,7 +2149,7 @@ Map 兼容说明：
 - `ObjectGuid` GUID 值对象。
 - `Aura` 光环实例基础对象。
 - 在线玩家列表、在线人数和已加载地图查询。
-- 定时器。
+- 全局定时器和对象绑定定时器。
 - 基础数据库查询和执行。
 - Player / Creature / GameObject / Item 常用方法。
 - Creature / GameObject 的 Add / Remove 生命周期事件。
@@ -2163,7 +2164,6 @@ Map 兼容说明：
 - `Creature`、`Player`、`Corpse`、`SpellInfo`、`Group`、`Guild`、`Map`、动态 `Spell`、通用 `Object` 和通用 `WorldObject` 的 3.3.5 参考方法名已补齐，不过部分接口按 Turtle 1.12 能力做兼容返回。
 - `ItemTemplate` 的 3.3.5 参考方法名已补齐，其中 `GetIcon()` 因 Turtle 1.12 当前未加载图标路径字段而兼容返回空字符串。
 - 3.3.5 专属成就、竞技场点数、铭文/双天赋、LFG 和部分邮件/拍卖/银行/训练师细节目前仍是兼容返回或空入口，后续需要按 Turtle 1.12 的真实系统单独补强。
-- 绑定到具体对象实例上的 Lua 事件目前只有兼容入口，真实对象事件队列还要继续移植。
 - 3.3.5 玩家事件里 `45` 成就完成和 `50` LFG 入队检查没有 Turtle 1.12 等价系统，当前不接入。
 - 载具 Vehicle 对象和真实载具系统在 Turtle 1.12 中不存在，当前只有 `IsOnVehicle` / `GetVehicle` / `GetVehicleKit` 兼容空入口。
 

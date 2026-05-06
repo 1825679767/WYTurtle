@@ -2,6 +2,7 @@
 #define TURTLE_LUA_ENGINE_H
 
 #include "Common.h"
+#include "ObjectGuid.h"
 
 #include <map>
 #include <mutex>
@@ -315,7 +316,10 @@ public:
     void PushObjectGuid(ObjectGuid const& guid);
 
     uint32 CreateTimedEvent(int functionRef, uint32 delay, uint32 repeats);
+    uint32 CreateTimedEvent(int functionRef, uint32 minDelay, uint32 maxDelay, uint32 repeats, WorldObject* object);
     bool RemoveTimedEvent(uint32 eventId);
+    bool RemoveTimedEventForObject(uint32 eventId, ObjectGuid const& objectGuid);
+    uint32 RemoveTimedEventsForObject(ObjectGuid const& objectGuid);
 
 private:
     struct TimedEvent
@@ -323,8 +327,14 @@ private:
         uint32 id;
         int functionRef;
         uint32 delay;
+        uint32 minDelay;
+        uint32 maxDelay;
         uint32 elapsed;
         int32 remaining;
+        bool hasObject;
+        ObjectGuid objectGuid;
+        uint32 mapId;
+        uint32 instanceId;
     };
 
     void OpenState();
@@ -353,6 +363,8 @@ private:
     void RegisterUnitMetatable();
 
     void LogError(char const* context);
+    uint32 GenerateTimedEventDelay(TimedEvent const& event) const;
+    WorldObject* ResolveTimedEventObject(TimedEvent const& event);
     bool CallPlayerEvent(uint32 eventId, Player* player);
     bool CallPlayerChatEvent(uint32 eventId, char const* context, Player* player, uint32 type, uint32 lang, std::string& message, Player* receiver, Group* group, Guild* guild, char const* channelName);
     void CallPlayerItemEvent(uint32 eventId, char const* context, Player* player, Item* item, uint32 count);
