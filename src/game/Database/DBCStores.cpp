@@ -57,7 +57,7 @@ DBCStorage <EmotesTextEntry> sEmotesTextStore(EmotesTextEntryfmt);
 DBCStorage <GameObjectDisplayInfoEntry> sGameObjectDisplayInfoStore(GameObjectDisplayInfofmt);
 
 DBCStorage <ItemBagFamilyEntry>           sItemBagFamilyStore(ItemBagFamilyfmt);
-//DBCStorage <ItemDisplayInfoEntry> sItemDisplayInfoStore(ItemDisplayTemplateEntryfmt); -- not used currently
+DBCStorage <ItemDisplayInfoEntry> sItemDisplayInfoStore(ItemDisplayTemplateEntryfmt);
 DBCStorage <ItemRandomPropertiesEntry> sItemRandomPropertiesStore(ItemRandomPropertiesfmt);
 DBCStorage <ItemSetEntry> sItemSetStore(ItemSetEntryfmt);
 DBCStorage <LockEntry> sLockStore(LockEntryfmt);
@@ -184,7 +184,7 @@ void LoadDBCStores(std::string const& dataPath)
 {
     std::string dbcPath = dataPath + "dbc/";
 
-    const uint32 DBCFilesCount = 42;
+    const uint32 DBCFilesCount = 43;
 
     StoreProblemList badDbcFiles;
 
@@ -208,6 +208,7 @@ void LoadDBCStores(std::string const& dataPath)
     LoadDBC(availableDbcLocales, badDbcFiles, sEmotesTextStore,          dbcPath, "EmotesText.dbc");
     LoadDBC(availableDbcLocales, badDbcFiles, sGameObjectDisplayInfoStore, dbcPath, "GameObjectDisplayInfo.dbc");
     LoadDBC(availableDbcLocales, badDbcFiles, sItemBagFamilyStore,       dbcPath, "ItemBagFamily.dbc");
+    LoadDBC(availableDbcLocales, badDbcFiles, sItemDisplayInfoStore,     dbcPath, "ItemDisplayInfo.dbc");
     LoadDBC(availableDbcLocales, badDbcFiles, sItemRandomPropertiesStore, dbcPath, "ItemRandomProperties.dbc");
     LoadDBC(availableDbcLocales, badDbcFiles, sItemSetStore,             dbcPath, "ItemSet.dbc");
     LoadDBC(availableDbcLocales, badDbcFiles, sLockStore,                dbcPath, "Lock.dbc");

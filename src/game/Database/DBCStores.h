@@ -75,7 +75,7 @@ extern DBCStorage <EmotesTextEntry>              sEmotesTextStore;
 extern DBCStorage <GameObjectDisplayInfoEntry>   sGameObjectDisplayInfoStore;
 
 extern DBCStorage <ItemBagFamilyEntry>           sItemBagFamilyStore;
-//extern DBCStorage <ItemDisplayInfoEntry>      sItemDisplayInfoStore; -- not used currently
+extern DBCStorage <ItemDisplayInfoEntry>         sItemDisplayInfoStore;
 extern DBCStorage <ItemRandomPropertiesEntry>    sItemRandomPropertiesStore;
 extern DBCStorage <ItemSetEntry>                 sItemSetStore;
 extern DBCStorage <LockEntry>                    sLockStore;

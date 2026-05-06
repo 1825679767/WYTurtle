@@ -60,6 +60,7 @@ E:\TurtleBY
 - Map 兼容补齐：`IsArena`、`IsEmpty`、`IsHeroic`、`GetDifficulty`、`GetHeight`、`GetAreaId`、`GetCreatures`、`GetCreaturesByAreaId`、`SetWeather`、`GetInstanceData`、`SaveInstanceData`。
 - InstanceData 基础对象封装：`Map:GetInstanceData()` 现在会返回 Turtle 副本脚本对象，支持 `GetData` / `SetData` / `GetData64` / `SetData64` / `GetGuid` / `SetGuid` / `SaveToDB` 等核心真实入口。
 - GameObject 兼容补齐：`HasQuest`、`IsTransport`、`IsActive`、`IsDestructible`、`GetLootRecipient`、`GetLootRecipientGroup`、`AddLoot`、`SaveToDB`、`RemoveFromWorld`、`UseDoorOrButton`、`Despawn`、`SetRespawnTime`。
+- ItemTemplate 图标补齐：核心现在加载 `ItemDisplayInfo.dbc` 的物品图标字段，`template:GetIcon()` 会按物品 `DisplayInfoID` 返回真实图标名，例如 `INV_Misc_QuestionMark` 这一类客户端图标路径名。
 - Spell 兼容补齐：`IsAutoRepeat`、`SetAutoRepeat`、`Cast`、`Finish`、`GetDuration`、`GetReagentCost`、`GetTargetDest`。
 - Group 兼容补齐：`GetGUID`、`GetMemberGUID`、`GetGroupType`、`IsLFGGroup`、`IsAssistant`、`SameSubGroup`、`HasFreeSlotSubGroup`、`SetLeader`、`AddMember`、`RemoveMember`、`Disband`、`ConvertToRaid`、`SetMembersGroup`、`SetTargetIcon`、`SetMemberFlag`、`SendPacket`。
 - Roll 基础对象封装：玩家事件 `56` 的最后一个参数现在返回 `Roll` 对象，不再是 `nil`；可读取掷骰物品、来源 GUID、参与玩家投票、need/greed/pass 统计、物品槽位和投票掩码。
@@ -1947,7 +1948,7 @@ template:HasSignature()
 说明：
 
 - `ItemTemplate` 的 `GetStat*()` 和 `GetSpell*()` 下标使用 Lua 风格的 `1` 到 `10` / `1` 到 `5`；`Item` 实例原有的 `item:GetSpellId(index)` 仍保持核心下标 `0` 到 `4`。
-- `GetIcon()` 是 3.3.5 Eluna 兼容方法；当前 Turtle 1.12 的 `ItemDisplayInfoEntry` 没有加载物品图标路径字段，所以这里兼容返回空字符串 `""`。
+- `GetIcon()` 会读取核心启动时加载的 `ItemDisplayInfo.dbc`，按模板的 `DisplayInfoID` 返回客户端图标名；找不到模板或显示信息时返回空字符串 `""`。
 - `GetItemTemplate()` 找不到模板时返回 `nil`。
 
 ## Quest 方法
@@ -2684,7 +2685,7 @@ end
 - `WorldPacket` 基础对象封装、客户端入包事件和服务端出包事件已接入；未知包事件 `6` 暂不触发，因为 Turtle 队列阶段会直接跳过无处理 opcode。
 - `ObjectGuid` 已有值对象封装，并已支持 `Map` 按 GUID 反查 Player / Creature / GameObject / DynamicObject / Corpse / Unit / WorldObject，以及 `Player` 按 GUID 反查自己背包或银行里的物品。Creature / GameObject / DynamicObject / Corpse 不做全局离线查找，需要地图上下文。
 - `Creature`、`Player`、`Corpse`、`DynamicObject`、`SpellInfo`、`Group`、`Guild`、`Map`、`BattleGround`、`Ticket`、动态 `Spell`、通用 `Object` 和通用 `WorldObject` 的 3.3.5 参考方法名已补齐或基础接入，不过部分接口按 Turtle 1.12 能力做兼容返回。
-- `ItemTemplate` 的 3.3.5 参考方法名已补齐，其中 `GetIcon()` 因 Turtle 1.12 当前未加载图标路径字段而兼容返回空字符串。
+- `ItemTemplate` 的 3.3.5 参考方法名已补齐，其中 `GetIcon()` 已接入 `ItemDisplayInfo.dbc` 图标字段；找不到显示信息时才返回空字符串。
 - 3.3.5 专属成就、竞技场点数、铭文/双天赋、LFG 和部分邮件/拍卖/银行/训练师细节目前仍是兼容返回或空入口，后续需要按 Turtle 1.12 的真实系统单独补强。
 - 3.3.5 玩家事件里 `45` 成就完成和 `50` LFG 入队检查没有 Turtle 1.12 等价系统，当前不接入。
 - 载具 Vehicle 对象和真实载具系统在 Turtle 1.12 中不存在，当前只有 `IsOnVehicle` / `GetVehicle` / `GetVehicleKit` 兼容空入口。

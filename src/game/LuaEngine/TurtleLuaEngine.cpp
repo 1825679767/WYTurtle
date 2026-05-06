@@ -11523,8 +11523,15 @@ int ItemTemplateGetExtraFlags(lua_State* state)
 
 int ItemTemplateGetIcon(lua_State* state)
 {
-    CheckItemTemplate(state, 1);
-    lua_pushstring(state, "");
+    ItemPrototype const* proto = CheckItemTemplate(state, 1);
+    if (!proto || !proto->DisplayInfoID)
+    {
+        lua_pushstring(state, "");
+        return 1;
+    }
+
+    ItemDisplayInfoEntry const* display = sItemDisplayInfoStore.LookupEntry(proto->DisplayInfoID);
+    lua_pushstring(state, display && display->inventoryIcon ? display->inventoryIcon : "");
     return 1;
 }
 

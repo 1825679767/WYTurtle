@@ -399,7 +399,7 @@ struct ItemBagFamilyEntry
 struct ItemDisplayInfoEntry
 {
     uint32      ID;
-    uint32      randomPropertyChance;
+    char*       inventoryIcon;
 };
 
 struct ItemRandomPropertiesEntry
