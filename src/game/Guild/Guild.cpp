@@ -34,6 +34,9 @@
 #include "World.h"
 #include "Anticheat.h"
 #include "Item.h"
+#ifdef USE_LUA
+#include "TurtleLuaEngine.h"
+#endif
 
 #define MAX_UNCOMPRESSED_PACKET_SIZE 0x8000 
 
@@ -165,7 +168,12 @@ bool Guild::Create(Player* leader, std::string gname)
     _InfernoBank = new GuildBank{ true };
     _InfernoBank->SetGuild(this);
 
-    return AddMember(m_LeaderGuid, (uint32)GR_GUILDMASTER) == GuildAddStatus::OK;
+    GuildAddStatus status = AddMember(m_LeaderGuid, (uint32)GR_GUILDMASTER);
+#ifdef USE_LUA
+    if (status == GuildAddStatus::OK)
+        sTurtleLuaEngine.OnGuildCreate(this, leader, m_Name);
+#endif
+    return status == GuildAddStatus::OK;
 }
 
 void Guild::CreateDefaultGuildRanks(int locale_idx)
@@ -273,6 +281,10 @@ GuildAddStatus Guild::AddMember(ObjectGuid plGuid, uint32 plRank)
 
     UpdateAccountsNumber();
 
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnGuildMemberAdd(this, pl, newmember.RankId);
+#endif
+
     return GuildAddStatus::OK;
 }
 
@@ -283,6 +295,10 @@ void Guild::SetMOTD(std::string motd)
     // motd now can be used for encoding to DB
     CharacterDatabase.escape_string(motd);
     CharacterDatabase.PExecute("UPDATE guild SET motd='%s' WHERE guildid='%u'", motd.c_str(), m_Id);
+
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnGuildMOTDChange(this, m_motd);
+#endif
 }
 
 void Guild::SetGINFO(std::string ginfo)
@@ -292,6 +308,10 @@ void Guild::SetGINFO(std::string ginfo)
     // ginfo now can be used for encoding to DB
     CharacterDatabase.escape_string(ginfo);
     CharacterDatabase.PExecute("UPDATE guild SET info='%s' WHERE guildid='%u'", ginfo.c_str(), m_Id);
+
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnGuildInfoChange(this, m_info);
+#endif
 }
 
 bool Guild::LoadGuildFromDB(QueryResult *guildDataResult)
@@ -556,6 +576,9 @@ bool Guild::DelMember(ObjectGuid guid, bool isDisbanding)
     sGuildMgr.GuildMemberRemoved(lowguid);
 
     Player *player = sObjectMgr.GetPlayer(guid);
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnGuildMemberRemove(this, player, isDisbanding);
+#endif
     // If player not online data in data field will be loaded from guild tabs no need to update it !!
     if (player)
     {
@@ -851,6 +874,10 @@ void Guild::SetRankRights(uint32 rankId, uint32 rights)
 void Guild::Disband()
 {
     BroadcastEvent(GE_DISBANDED);
+
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnGuildDisband(this);
+#endif
 
     while (!members.empty())
     {

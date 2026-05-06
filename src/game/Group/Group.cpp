@@ -168,6 +168,10 @@ bool Group::Create(ObjectGuid guid, const char * name)
 
     _updateLeaderFlag();
 
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnGroupCreate(this, guid, uint32(m_groupType));
+#endif
+
     return true;
 }
 
@@ -259,6 +263,10 @@ bool Group::AddInvite(Player *player)
     m_invitees.insert(player);
 
     player->SetGroupInvite(this);
+
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnGroupMemberInvite(this, player->GetObjectGuid());
+#endif
 
     return true;
 }
@@ -508,6 +516,10 @@ uint32 Group::RemoveMember(ObjectGuid guid, uint8 removeMethod)
             sLFGMgr.UpdateGroup(m_Id);
 
         SendUpdate();
+
+#ifdef USE_LUA
+        sTurtleLuaEngine.OnGroupMemberRemove(this, guid, removeMethod);
+#endif
     }
     // if group before remove <= 2 disband it
     else
@@ -532,6 +544,10 @@ void Group::ChangeLeader(ObjectGuid guid)
 
 void Group::Disband(bool hideDestroy, ObjectGuid initiator)
 {
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnGroupDisband(this);
+#endif
+
     Player* player;
     Player* remainingPlayer = nullptr;
 
@@ -1575,6 +1591,10 @@ bool Group::_addMember(ObjectGuid guid, const char* name, bool isAssistant, uint
                                    m_Id, member.guid.GetCounter(), ((member.assistant == 1) ? 1 : 0), member.group);
     }
 
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnGroupMemberAdd(this, guid);
+#endif
+
     return true;
 }
 
@@ -1670,6 +1690,8 @@ void Group::_setLeader(ObjectGuid guid)
     if (slot == m_memberSlots.end())
         return;
 
+    ObjectGuid oldLeaderGuid = m_leaderGuid;
+
     if (!isBGGroup())
     {
         uint32 slot_lowguid = slot->guid.GetCounter();
@@ -1724,6 +1746,11 @@ void Group::_setLeader(ObjectGuid guid)
     m_leaderName = slot->name;
     m_leaderLastOnline = time(nullptr);
     _updateLeaderFlag();
+
+#ifdef USE_LUA
+    if (oldLeaderGuid != m_leaderGuid)
+        sTurtleLuaEngine.OnGroupLeaderChange(this, m_leaderGuid, oldLeaderGuid);
+#endif
 }
 
 void Group::_updateLeaderFlag(const bool remove /*= false*/)

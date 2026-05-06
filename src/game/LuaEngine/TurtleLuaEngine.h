@@ -114,6 +114,26 @@ enum TurtleLuaPacketEvents
     PACKET_EVENT_ON_PACKET_SEND = 7,
 };
 
+enum TurtleLuaGuildEvents
+{
+    GUILD_EVENT_ON_ADD_MEMBER = 1,
+    GUILD_EVENT_ON_REMOVE_MEMBER = 2,
+    GUILD_EVENT_ON_MOTD_CHANGE = 3,
+    GUILD_EVENT_ON_INFO_CHANGE = 4,
+    GUILD_EVENT_ON_CREATE = 5,
+    GUILD_EVENT_ON_DISBAND = 6,
+};
+
+enum TurtleLuaGroupEvents
+{
+    GROUP_EVENT_ON_MEMBER_ADD = 1,
+    GROUP_EVENT_ON_MEMBER_INVITE = 2,
+    GROUP_EVENT_ON_MEMBER_REMOVE = 3,
+    GROUP_EVENT_ON_LEADER_CHANGE = 4,
+    GROUP_EVENT_ON_DISBAND = 5,
+    GROUP_EVENT_ON_CREATE = 6,
+};
+
 enum TurtleLuaCreatureEvents
 {
     CREATURE_EVENT_ON_ENTER_COMBAT = 1,
@@ -277,6 +297,8 @@ public:
 
     void RegisterPlayerEvent(uint32 eventId, int functionRef);
     void RegisterServerEvent(uint32 eventId, int functionRef);
+    void RegisterGroupEvent(uint32 eventId, int functionRef);
+    void RegisterGuildEvent(uint32 eventId, int functionRef);
     void RegisterCreatureEvent(uint32 entry, uint32 eventId, int functionRef);
     void RegisterGameObjectEvent(uint32 entry, uint32 eventId, int functionRef);
     void RegisterItemEvent(uint32 entry, uint32 eventId, int functionRef);
@@ -287,6 +309,8 @@ public:
     void RegisterItemGossipEvent(uint32 entry, uint32 eventId, int functionRef);
     void ClearPlayerEvents(uint32 eventId, bool allEvents);
     void ClearServerEvents(uint32 eventId, bool allEvents);
+    void ClearGroupEvents(uint32 eventId, bool allEvents);
+    void ClearGuildEvents(uint32 eventId, bool allEvents);
     void ClearCreatureEvents(uint32 entry, uint32 eventId, bool allEvents);
     void ClearGameObjectEvents(uint32 entry, uint32 eventId, bool allEvents);
     void ClearItemEvents(uint32 entry, uint32 eventId, bool allEvents);
@@ -302,6 +326,18 @@ public:
     bool OnGameObjectGossipSelect(Player* player, GameObject* go, uint32 sender, uint32 action, char const* code);
     bool OnItemGossipHello(Player* player, Item* item, SpellCastTargets& targets);
     bool OnItemGossipSelect(Player* player, Item* item, uint32 sender, uint32 action, char const* code);
+    void OnGroupCreate(Group* group, ObjectGuid const& leaderGuid, uint32 groupType);
+    void OnGroupMemberAdd(Group* group, ObjectGuid const& guid);
+    void OnGroupMemberInvite(Group* group, ObjectGuid const& guid);
+    void OnGroupMemberRemove(Group* group, ObjectGuid const& guid, uint8 removeMethod);
+    void OnGroupLeaderChange(Group* group, ObjectGuid const& newLeaderGuid, ObjectGuid const& oldLeaderGuid);
+    void OnGroupDisband(Group* group);
+    void OnGuildCreate(Guild* guild, Player* leader, std::string const& name);
+    void OnGuildMemberAdd(Guild* guild, Player* player, uint32 rank);
+    void OnGuildMemberRemove(Guild* guild, Player* player, bool isDisbanding);
+    void OnGuildMOTDChange(Guild* guild, std::string const& motd);
+    void OnGuildInfoChange(Guild* guild, std::string const& info);
+    void OnGuildDisband(Guild* guild);
     bool OnGameObjectUse(Player* player, GameObject* go);
     void OnGameObjectLootStateChanged(GameObject* go, uint32 state);
     void OnGameObjectGoStateChanged(GameObject* go, uint32 state);
@@ -415,6 +451,8 @@ private:
     std::recursive_mutex _lock;
     std::map<uint32, std::vector<int>> _serverEvents;
     std::map<uint32, std::vector<int>> _playerEvents;
+    std::map<uint32, std::vector<int>> _groupEvents;
+    std::map<uint32, std::vector<int>> _guildEvents;
     std::map<uint32, std::map<uint32, std::vector<int>>> _creatureEvents;
     std::map<uint32, std::map<uint32, std::vector<int>>> _gameObjectEvents;
     std::map<uint32, std::map<uint32, std::vector<int>>> _itemEvents;

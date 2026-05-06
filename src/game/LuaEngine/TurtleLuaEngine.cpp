@@ -1036,6 +1036,34 @@ int LuaRegisterServerEvent(lua_State* state)
     return 0;
 }
 
+int LuaRegisterGroupEvent(lua_State* state)
+{
+    auto* engine = GetEngine(state);
+    if (!engine)
+        return luaL_error(state, "Lua engine is not available");
+
+    uint32 eventId = static_cast<uint32>(luaL_checkinteger(state, 1));
+    luaL_checktype(state, 2, LUA_TFUNCTION);
+    lua_pushvalue(state, 2);
+    int functionRef = luaL_ref(state, LUA_REGISTRYINDEX);
+    engine->RegisterGroupEvent(eventId, functionRef);
+    return 0;
+}
+
+int LuaRegisterGuildEvent(lua_State* state)
+{
+    auto* engine = GetEngine(state);
+    if (!engine)
+        return luaL_error(state, "Lua engine is not available");
+
+    uint32 eventId = static_cast<uint32>(luaL_checkinteger(state, 1));
+    luaL_checktype(state, 2, LUA_TFUNCTION);
+    lua_pushvalue(state, 2);
+    int functionRef = luaL_ref(state, LUA_REGISTRYINDEX);
+    engine->RegisterGuildEvent(eventId, functionRef);
+    return 0;
+}
+
 int LuaRegisterPacketEvent(lua_State* state)
 {
     auto* engine = GetEngine(state);
@@ -1125,6 +1153,30 @@ int LuaClearServerEvents(lua_State* state)
     bool allEvents = lua_isnoneornil(state, 1);
     uint32 eventId = allEvents ? 0 : static_cast<uint32>(luaL_checkinteger(state, 1));
     engine->ClearServerEvents(eventId, allEvents);
+    return 0;
+}
+
+int LuaClearGroupEvents(lua_State* state)
+{
+    auto* engine = GetEngine(state);
+    if (!engine)
+        return luaL_error(state, "Lua engine is not available");
+
+    bool allEvents = lua_isnoneornil(state, 1);
+    uint32 eventId = allEvents ? 0 : static_cast<uint32>(luaL_checkinteger(state, 1));
+    engine->ClearGroupEvents(eventId, allEvents);
+    return 0;
+}
+
+int LuaClearGuildEvents(lua_State* state)
+{
+    auto* engine = GetEngine(state);
+    if (!engine)
+        return luaL_error(state, "Lua engine is not available");
+
+    bool allEvents = lua_isnoneornil(state, 1);
+    uint32 eventId = allEvents ? 0 : static_cast<uint32>(luaL_checkinteger(state, 1));
+    engine->ClearGuildEvents(eventId, allEvents);
     return 0;
 }
 
@@ -15498,6 +15550,8 @@ void TurtleLuaEngine::RegisterGlobals()
 {
     lua_register(_state, "RegisterPlayerEvent", &LuaRegisterPlayerEvent);
     lua_register(_state, "RegisterServerEvent", &LuaRegisterServerEvent);
+    lua_register(_state, "RegisterGroupEvent", &LuaRegisterGroupEvent);
+    lua_register(_state, "RegisterGuildEvent", &LuaRegisterGuildEvent);
     lua_register(_state, "RegisterPacketEvent", &LuaRegisterPacketEvent);
     lua_register(_state, "RegisterCreatureEvent", &LuaRegisterCreatureEvent);
     lua_register(_state, "RegisterGameObjectEvent", &LuaRegisterGameObjectEvent);
@@ -15508,6 +15562,8 @@ void TurtleLuaEngine::RegisterGlobals()
     lua_register(_state, "RegisterItemGossipEvent", &LuaRegisterItemGossipEvent);
     lua_register(_state, "ClearPlayerEvents", &LuaClearPlayerEvents);
     lua_register(_state, "ClearServerEvents", &LuaClearServerEvents);
+    lua_register(_state, "ClearGroupEvents", &LuaClearGroupEvents);
+    lua_register(_state, "ClearGuildEvents", &LuaClearGuildEvents);
     lua_register(_state, "ClearPacketEvents", &LuaClearPacketEvents);
     lua_register(_state, "ClearCreatureEvents", &LuaClearCreatureEvents);
     lua_register(_state, "ClearGameObjectEvents", &LuaClearGameObjectEvents);
@@ -17987,6 +18043,16 @@ void TurtleLuaEngine::RegisterServerEvent(uint32 eventId, int functionRef)
     _serverEvents[eventId].push_back(functionRef);
 }
 
+void TurtleLuaEngine::RegisterGroupEvent(uint32 eventId, int functionRef)
+{
+    _groupEvents[eventId].push_back(functionRef);
+}
+
+void TurtleLuaEngine::RegisterGuildEvent(uint32 eventId, int functionRef)
+{
+    _guildEvents[eventId].push_back(functionRef);
+}
+
 void TurtleLuaEngine::RegisterCreatureEvent(uint32 entry, uint32 eventId, int functionRef)
 {
     _creatureEvents[entry][eventId].push_back(functionRef);
@@ -18035,6 +18101,16 @@ void TurtleLuaEngine::ClearPlayerEvents(uint32 eventId, bool allEvents)
 void TurtleLuaEngine::ClearServerEvents(uint32 eventId, bool allEvents)
 {
     ClearEventStore(_state, _serverEvents, eventId, allEvents);
+}
+
+void TurtleLuaEngine::ClearGroupEvents(uint32 eventId, bool allEvents)
+{
+    ClearEventStore(_state, _groupEvents, eventId, allEvents);
+}
+
+void TurtleLuaEngine::ClearGuildEvents(uint32 eventId, bool allEvents)
+{
+    ClearEventStore(_state, _guildEvents, eventId, allEvents);
 }
 
 void TurtleLuaEngine::ClearCreatureEvents(uint32 entry, uint32 eventId, bool allEvents)
@@ -18532,6 +18608,396 @@ void TurtleLuaEngine::CallServerEvent(uint32 eventId, uint32 arg)
         if (lua_pcall(_state, 2, 0, 0) != LUA_OK)
         {
             LogError("server event");
+            lua_pop(_state, 1);
+        }
+    }
+}
+
+void TurtleLuaEngine::OnGroupCreate(Group* group, ObjectGuid const& leaderGuid, uint32 groupType)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+    if (!IsEnabled() || !group)
+        return;
+
+    auto itr = _groupEvents.find(GROUP_EVENT_ON_CREATE);
+    if (itr == _groupEvents.end())
+        return;
+
+    std::vector<int> functionRefs = itr->second;
+    for (int functionRef : functionRefs)
+    {
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        lua_pushinteger(_state, GROUP_EVENT_ON_CREATE);
+        PushGroup(group);
+        PushObjectGuid(leaderGuid);
+        lua_pushinteger(_state, groupType);
+
+        if (lua_pcall(_state, 4, 0, 0) != LUA_OK)
+        {
+            LogError("group create event");
+            lua_pop(_state, 1);
+        }
+    }
+}
+
+void TurtleLuaEngine::OnGroupMemberAdd(Group* group, ObjectGuid const& guid)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+    if (!IsEnabled() || !group)
+        return;
+
+    auto itr = _groupEvents.find(GROUP_EVENT_ON_MEMBER_ADD);
+    if (itr == _groupEvents.end())
+        return;
+
+    std::vector<int> functionRefs = itr->second;
+    for (int functionRef : functionRefs)
+    {
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        lua_pushinteger(_state, GROUP_EVENT_ON_MEMBER_ADD);
+        PushGroup(group);
+        PushObjectGuid(guid);
+
+        if (lua_pcall(_state, 3, 0, 0) != LUA_OK)
+        {
+            LogError("group member add event");
+            lua_pop(_state, 1);
+        }
+    }
+}
+
+void TurtleLuaEngine::OnGroupMemberInvite(Group* group, ObjectGuid const& guid)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+    if (!IsEnabled() || !group)
+        return;
+
+    auto itr = _groupEvents.find(GROUP_EVENT_ON_MEMBER_INVITE);
+    if (itr == _groupEvents.end())
+        return;
+
+    std::vector<int> functionRefs = itr->second;
+    for (int functionRef : functionRefs)
+    {
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        lua_pushinteger(_state, GROUP_EVENT_ON_MEMBER_INVITE);
+        PushGroup(group);
+        PushObjectGuid(guid);
+
+        if (lua_pcall(_state, 3, 0, 0) != LUA_OK)
+        {
+            LogError("group member invite event");
+            lua_pop(_state, 1);
+        }
+    }
+}
+
+void TurtleLuaEngine::OnGroupMemberRemove(Group* group, ObjectGuid const& guid, uint8 removeMethod)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+    if (!IsEnabled() || !group)
+        return;
+
+    auto itr = _groupEvents.find(GROUP_EVENT_ON_MEMBER_REMOVE);
+    if (itr == _groupEvents.end())
+        return;
+
+    std::vector<int> functionRefs = itr->second;
+    for (int functionRef : functionRefs)
+    {
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        lua_pushinteger(_state, GROUP_EVENT_ON_MEMBER_REMOVE);
+        PushGroup(group);
+        PushObjectGuid(guid);
+        lua_pushinteger(_state, removeMethod);
+        lua_pushnil(_state);
+        lua_pushnil(_state);
+
+        if (lua_pcall(_state, 6, 0, 0) != LUA_OK)
+        {
+            LogError("group member remove event");
+            lua_pop(_state, 1);
+        }
+    }
+}
+
+void TurtleLuaEngine::OnGroupLeaderChange(Group* group, ObjectGuid const& newLeaderGuid, ObjectGuid const& oldLeaderGuid)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+    if (!IsEnabled() || !group)
+        return;
+
+    auto itr = _groupEvents.find(GROUP_EVENT_ON_LEADER_CHANGE);
+    if (itr == _groupEvents.end())
+        return;
+
+    std::vector<int> functionRefs = itr->second;
+    for (int functionRef : functionRefs)
+    {
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        lua_pushinteger(_state, GROUP_EVENT_ON_LEADER_CHANGE);
+        PushGroup(group);
+        PushObjectGuid(newLeaderGuid);
+        PushObjectGuid(oldLeaderGuid);
+
+        if (lua_pcall(_state, 4, 0, 0) != LUA_OK)
+        {
+            LogError("group leader change event");
+            lua_pop(_state, 1);
+        }
+    }
+}
+
+void TurtleLuaEngine::OnGroupDisband(Group* group)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+    if (!IsEnabled() || !group)
+        return;
+
+    auto itr = _groupEvents.find(GROUP_EVENT_ON_DISBAND);
+    if (itr == _groupEvents.end())
+        return;
+
+    std::vector<int> functionRefs = itr->second;
+    for (int functionRef : functionRefs)
+    {
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        lua_pushinteger(_state, GROUP_EVENT_ON_DISBAND);
+        PushGroup(group);
+
+        if (lua_pcall(_state, 2, 0, 0) != LUA_OK)
+        {
+            LogError("group disband event");
+            lua_pop(_state, 1);
+        }
+    }
+}
+
+void TurtleLuaEngine::OnGuildCreate(Guild* guild, Player* leader, std::string const& name)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+    if (!IsEnabled() || !guild)
+        return;
+
+    auto itr = _guildEvents.find(GUILD_EVENT_ON_CREATE);
+    if (itr == _guildEvents.end())
+        return;
+
+    std::vector<int> functionRefs = itr->second;
+    for (int functionRef : functionRefs)
+    {
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        lua_pushinteger(_state, GUILD_EVENT_ON_CREATE);
+        PushGuild(guild);
+        PushPlayer(leader);
+        lua_pushlstring(_state, name.c_str(), name.size());
+
+        if (lua_pcall(_state, 4, 0, 0) != LUA_OK)
+        {
+            LogError("guild create event");
+            lua_pop(_state, 1);
+        }
+    }
+}
+
+void TurtleLuaEngine::OnGuildMemberAdd(Guild* guild, Player* player, uint32 rank)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+    if (!IsEnabled() || !guild)
+        return;
+
+    auto itr = _guildEvents.find(GUILD_EVENT_ON_ADD_MEMBER);
+    if (itr == _guildEvents.end())
+        return;
+
+    std::vector<int> functionRefs = itr->second;
+    for (int functionRef : functionRefs)
+    {
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        lua_pushinteger(_state, GUILD_EVENT_ON_ADD_MEMBER);
+        PushGuild(guild);
+        PushPlayer(player);
+        lua_pushinteger(_state, rank);
+
+        if (lua_pcall(_state, 4, 0, 0) != LUA_OK)
+        {
+            LogError("guild member add event");
+            lua_pop(_state, 1);
+        }
+    }
+}
+
+void TurtleLuaEngine::OnGuildMemberRemove(Guild* guild, Player* player, bool isDisbanding)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+    if (!IsEnabled() || !guild)
+        return;
+
+    auto itr = _guildEvents.find(GUILD_EVENT_ON_REMOVE_MEMBER);
+    if (itr == _guildEvents.end())
+        return;
+
+    std::vector<int> functionRefs = itr->second;
+    for (int functionRef : functionRefs)
+    {
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        lua_pushinteger(_state, GUILD_EVENT_ON_REMOVE_MEMBER);
+        PushGuild(guild);
+        PushPlayer(player);
+        lua_pushboolean(_state, isDisbanding);
+
+        if (lua_pcall(_state, 4, 0, 0) != LUA_OK)
+        {
+            LogError("guild member remove event");
+            lua_pop(_state, 1);
+        }
+    }
+}
+
+void TurtleLuaEngine::OnGuildMOTDChange(Guild* guild, std::string const& motd)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+    if (!IsEnabled() || !guild)
+        return;
+
+    auto itr = _guildEvents.find(GUILD_EVENT_ON_MOTD_CHANGE);
+    if (itr == _guildEvents.end())
+        return;
+
+    std::vector<int> functionRefs = itr->second;
+    for (int functionRef : functionRefs)
+    {
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        lua_pushinteger(_state, GUILD_EVENT_ON_MOTD_CHANGE);
+        PushGuild(guild);
+        lua_pushlstring(_state, motd.c_str(), motd.size());
+
+        if (lua_pcall(_state, 3, 0, 0) != LUA_OK)
+        {
+            LogError("guild motd change event");
+            lua_pop(_state, 1);
+        }
+    }
+}
+
+void TurtleLuaEngine::OnGuildInfoChange(Guild* guild, std::string const& info)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+    if (!IsEnabled() || !guild)
+        return;
+
+    auto itr = _guildEvents.find(GUILD_EVENT_ON_INFO_CHANGE);
+    if (itr == _guildEvents.end())
+        return;
+
+    std::vector<int> functionRefs = itr->second;
+    for (int functionRef : functionRefs)
+    {
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        lua_pushinteger(_state, GUILD_EVENT_ON_INFO_CHANGE);
+        PushGuild(guild);
+        lua_pushlstring(_state, info.c_str(), info.size());
+
+        if (lua_pcall(_state, 3, 0, 0) != LUA_OK)
+        {
+            LogError("guild info change event");
+            lua_pop(_state, 1);
+        }
+    }
+}
+
+void TurtleLuaEngine::OnGuildDisband(Guild* guild)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+    if (!IsEnabled() || !guild)
+        return;
+
+    auto itr = _guildEvents.find(GUILD_EVENT_ON_DISBAND);
+    if (itr == _guildEvents.end())
+        return;
+
+    std::vector<int> functionRefs = itr->second;
+    for (int functionRef : functionRefs)
+    {
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        lua_pushinteger(_state, GUILD_EVENT_ON_DISBAND);
+        PushGuild(guild);
+
+        if (lua_pcall(_state, 2, 0, 0) != LUA_OK)
+        {
+            LogError("guild disband event");
             lua_pop(_state, 1);
         }
     }
