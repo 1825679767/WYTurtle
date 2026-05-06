@@ -360,6 +360,7 @@ private:
     void RegisterSpellTargetsMetatable();
     void RegisterWorldPacketMetatable();
     void RegisterObjectGuidMetatable();
+    void RegisterChatHandlerMetatable();
     void RegisterUnitMetatable();
 
     void LogError(char const* context);

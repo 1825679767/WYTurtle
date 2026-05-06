@@ -1,5 +1,6 @@
 #include "TurtleLuaEngine.h"
 
+#include "AccountMgr.h"
 #include "Chat.h"
 #include "AI/CreatureAI.h"
 #include "Config/Config.h"
@@ -72,6 +73,7 @@ constexpr char const* SPELLINFO_METATABLE = "Turtle.SpellInfo";
 constexpr char const* SPELLTARGETS_METATABLE = "Turtle.SpellCastTargets";
 constexpr char const* WORLDPACKET_METATABLE = "Turtle.WorldPacket";
 constexpr char const* OBJECTGUID_METATABLE = "Turtle.ObjectGuid";
+constexpr char const* CHATHANDLER_METATABLE = "Turtle.ChatHandler";
 
 uint32 ToElunaChatType(uint32 type)
 {
@@ -196,6 +198,21 @@ struct LuaWorldPacket
 struct LuaObjectGuid
 {
     ObjectGuid guid;
+};
+
+struct LuaChatHandler
+{
+    ObjectGuid playerGuid;
+};
+
+class LuaChatHandlerAccess : public ChatHandler
+{
+public:
+    explicit LuaChatHandlerAccess(Player* player) : ChatHandler(player) {}
+
+    using ChatHandler::GetSelectedCreature;
+    using ChatHandler::GetSelectedPlayer;
+    using ChatHandler::GetSelectedUnit;
 };
 
 void UnrefFunctionRefs(lua_State* state, std::vector<int>& refs)
@@ -393,6 +410,29 @@ ObjectGuid const* CheckObjectGuid(lua_State* state, int index)
 {
     auto* holder = static_cast<LuaObjectGuid*>(luaL_checkudata(state, index, OBJECTGUID_METATABLE));
     return holder ? &holder->guid : nullptr;
+}
+
+LuaChatHandler* CheckChatHandler(lua_State* state, int index)
+{
+    return static_cast<LuaChatHandler*>(luaL_checkudata(state, index, CHATHANDLER_METATABLE));
+}
+
+Player* GetChatHandlerPlayer(LuaChatHandler const* holder)
+{
+    if (!holder || holder->playerGuid.IsEmpty())
+        return nullptr;
+
+    Player* player = ObjectAccessor::FindPlayer(holder->playerGuid);
+    return player && player->GetSession() ? player : nullptr;
+}
+
+void PushChatHandlerValue(lua_State* state, Player* player)
+{
+    auto* holder = static_cast<LuaChatHandler*>(lua_newuserdata(state, sizeof(LuaChatHandler)));
+    holder->playerGuid = player ? player->GetObjectGuid() : ObjectGuid();
+
+    luaL_getmetatable(state, CHATHANDLER_METATABLE);
+    lua_setmetatable(state, -2);
 }
 
 void PushWorldObjectValue(lua_State* state, TurtleLuaEngine* engine, WorldObject* object)
@@ -1262,6 +1302,213 @@ int LuaSendWorldMessage(lua_State* state)
     char const* message = luaL_checkstring(state, 1);
     sWorld.SendServerMessage(SERVER_MSG_CUSTOM, message);
     return 0;
+}
+
+int ChatHandlerSendSysMessage(lua_State* state)
+{
+    LuaChatHandler* holder = CheckChatHandler(state, 1);
+    if (Player* player = GetChatHandlerPlayer(holder))
+    {
+        ChatHandler handler(player);
+        if (lua_isnumber(state, 2))
+            handler.SendSysMessage(static_cast<int32>(luaL_checkinteger(state, 2)));
+        else
+            handler.SendSysMessage(luaL_checkstring(state, 2));
+    }
+    else if (!lua_isnoneornil(state, 2))
+    {
+        if (lua_isnumber(state, 2))
+            sLog.outString("%s", sObjectMgr.GetMangosStringForDBCLocale(static_cast<int32>(lua_tointeger(state, 2))));
+        else
+            sLog.outString("%s", luaL_checkstring(state, 2));
+    }
+
+    return 0;
+}
+
+int ChatHandlerIsConsole(lua_State* state)
+{
+    LuaChatHandler* holder = CheckChatHandler(state, 1);
+    lua_pushboolean(state, !GetChatHandlerPlayer(holder));
+    return 1;
+}
+
+int ChatHandlerGetPlayer(lua_State* state)
+{
+    TurtleLuaEngine* engine = GetEngine(state);
+    LuaChatHandler* holder = CheckChatHandler(state, 1);
+    if (engine)
+        engine->PushPlayer(GetChatHandlerPlayer(holder));
+    else
+        lua_pushnil(state);
+    return 1;
+}
+
+int ChatHandlerSendGlobalSysMessage(lua_State* state)
+{
+    char const* message = luaL_checkstring(state, 2);
+    sWorld.SendGlobalText(message, nullptr);
+    return 0;
+}
+
+int ChatHandlerSendGlobalGMSysMessage(lua_State* state)
+{
+    char const* message = luaL_checkstring(state, 2);
+    sWorld.SendGMText(message);
+    return 0;
+}
+
+int ChatHandlerHasLowerSecurity(lua_State* state)
+{
+    LuaChatHandler* holder = CheckChatHandler(state, 1);
+    Player* target = CheckPlayer(state, 2);
+    bool strong = lua_isnoneornil(state, 3) ? false : lua_toboolean(state, 3) != 0;
+
+    AccountTypes sourceSecurity = SEC_CONSOLE;
+    if (Player* player = GetChatHandlerPlayer(holder))
+        sourceSecurity = player->GetSession()->GetSecurity();
+
+    AccountTypes targetSecurity = target && target->GetSession() ? target->GetSession()->GetSecurity() : SEC_PLAYER;
+    lua_pushboolean(state, strong ? sourceSecurity <= targetSecurity : sourceSecurity < targetSecurity);
+    return 1;
+}
+
+int ChatHandlerHasLowerSecurityAccount(lua_State* state)
+{
+    LuaChatHandler* holder = CheckChatHandler(state, 1);
+    uint32 accountId = static_cast<uint32>(luaL_checkinteger(state, 2));
+    bool strong = lua_isnoneornil(state, 3) ? false : lua_toboolean(state, 3) != 0;
+
+    AccountTypes sourceSecurity = SEC_CONSOLE;
+    if (Player* player = GetChatHandlerPlayer(holder))
+        sourceSecurity = player->GetSession()->GetSecurity();
+
+    AccountTypes targetSecurity = sAccountMgr.GetSecurity(accountId);
+    lua_pushboolean(state, strong ? sourceSecurity <= targetSecurity : sourceSecurity < targetSecurity);
+    return 1;
+}
+
+int ChatHandlerGetSelectedPlayer(lua_State* state)
+{
+    TurtleLuaEngine* engine = GetEngine(state);
+    LuaChatHandler* holder = CheckChatHandler(state, 1);
+    Player* selected = nullptr;
+
+    if (Player* player = GetChatHandlerPlayer(holder))
+    {
+        LuaChatHandlerAccess handler(player);
+        selected = handler.GetSelectedPlayer();
+    }
+
+    if (engine)
+        engine->PushPlayer(selected);
+    else
+        lua_pushnil(state);
+    return 1;
+}
+
+int ChatHandlerGetSelectedCreature(lua_State* state)
+{
+    TurtleLuaEngine* engine = GetEngine(state);
+    LuaChatHandler* holder = CheckChatHandler(state, 1);
+    Creature* selected = nullptr;
+
+    if (Player* player = GetChatHandlerPlayer(holder))
+    {
+        LuaChatHandlerAccess handler(player);
+        selected = handler.GetSelectedCreature();
+    }
+
+    if (engine)
+        engine->PushCreature(selected);
+    else
+        lua_pushnil(state);
+    return 1;
+}
+
+int ChatHandlerGetSelectedUnit(lua_State* state)
+{
+    TurtleLuaEngine* engine = GetEngine(state);
+    LuaChatHandler* holder = CheckChatHandler(state, 1);
+    Unit* selected = nullptr;
+
+    if (Player* player = GetChatHandlerPlayer(holder))
+    {
+        LuaChatHandlerAccess handler(player);
+        selected = handler.GetSelectedUnit();
+    }
+
+    if (engine)
+        engine->PushUnit(selected);
+    else
+        lua_pushnil(state);
+    return 1;
+}
+
+int ChatHandlerGetSelectedObject(lua_State* state)
+{
+    TurtleLuaEngine* engine = GetEngine(state);
+    LuaChatHandler* holder = CheckChatHandler(state, 1);
+    WorldObject* selected = nullptr;
+
+    if (Player* player = GetChatHandlerPlayer(holder))
+    {
+        LuaChatHandlerAccess handler(player);
+        selected = handler.GetSelectedUnit();
+        if (!selected && player->GetMap())
+            selected = player->GetMap()->GetGameObject(player->GetSelectedGobj());
+    }
+
+    PushWorldObjectValue(state, engine, selected);
+    return 1;
+}
+
+int ChatHandlerGetSelectedPlayerOrSelf(lua_State* state)
+{
+    TurtleLuaEngine* engine = GetEngine(state);
+    LuaChatHandler* holder = CheckChatHandler(state, 1);
+    Player* player = GetChatHandlerPlayer(holder);
+    Player* selected = nullptr;
+
+    if (player)
+    {
+        LuaChatHandlerAccess handler(player);
+        selected = handler.GetSelectedPlayer();
+    }
+
+    if (engine)
+        engine->PushPlayer(selected ? selected : player);
+    else
+        lua_pushnil(state);
+    return 1;
+}
+
+int ChatHandlerIsAvailable(lua_State* state)
+{
+    LuaChatHandler* holder = CheckChatHandler(state, 1);
+    uint32 securityLevel = static_cast<uint32>(luaL_checkinteger(state, 2));
+
+    AccountTypes sourceSecurity = SEC_CONSOLE;
+    if (Player* player = GetChatHandlerPlayer(holder))
+        sourceSecurity = player->GetSession()->GetSecurity();
+
+    lua_pushboolean(state, static_cast<uint32>(sourceSecurity) >= securityLevel);
+    return 1;
+}
+
+int ChatHandlerHasSentErrorMessage(lua_State* state)
+{
+    LuaChatHandler* holder = CheckChatHandler(state, 1);
+    bool sent = false;
+
+    if (Player* player = GetChatHandlerPlayer(holder))
+    {
+        ChatHandler handler(player);
+        sent = handler.HasSentErrorMessage();
+    }
+
+    lua_pushboolean(state, sent);
+    return 1;
 }
 
 int LuaGetGameTime(lua_State* state)
@@ -13462,6 +13709,7 @@ void TurtleLuaEngine::OpenState()
     RegisterSpellTargetsMetatable();
     RegisterWorldPacketMetatable();
     RegisterObjectGuidMetatable();
+    RegisterChatHandlerMetatable();
 }
 
 void TurtleLuaEngine::CloseState()
@@ -15600,6 +15848,30 @@ void TurtleLuaEngine::RegisterObjectGuidMetatable()
     lua_pop(_state, 1);
 }
 
+void TurtleLuaEngine::RegisterChatHandlerMetatable()
+{
+    luaL_newmetatable(_state, CHATHANDLER_METATABLE);
+
+    lua_newtable(_state);
+    SetMethod(_state, "SendSysMessage", &ChatHandlerSendSysMessage);
+    SetMethod(_state, "IsConsole", &ChatHandlerIsConsole);
+    SetMethod(_state, "GetPlayer", &ChatHandlerGetPlayer);
+    SetMethod(_state, "SendGlobalSysMessage", &ChatHandlerSendGlobalSysMessage);
+    SetMethod(_state, "SendGlobalGMSysMessage", &ChatHandlerSendGlobalGMSysMessage);
+    SetMethod(_state, "HasLowerSecurity", &ChatHandlerHasLowerSecurity);
+    SetMethod(_state, "HasLowerSecurityAccount", &ChatHandlerHasLowerSecurityAccount);
+    SetMethod(_state, "GetSelectedPlayer", &ChatHandlerGetSelectedPlayer);
+    SetMethod(_state, "GetSelectedCreature", &ChatHandlerGetSelectedCreature);
+    SetMethod(_state, "GetSelectedUnit", &ChatHandlerGetSelectedUnit);
+    SetMethod(_state, "GetSelectedObject", &ChatHandlerGetSelectedObject);
+    SetMethod(_state, "GetSelectedPlayerOrSelf", &ChatHandlerGetSelectedPlayerOrSelf);
+    SetMethod(_state, "IsAvailable", &ChatHandlerIsAvailable);
+    SetMethod(_state, "HasSentErrorMessage", &ChatHandlerHasSentErrorMessage);
+    lua_setfield(_state, -2, "__index");
+
+    lua_pop(_state, 1);
+}
+
 void TurtleLuaEngine::RegisterUnitMetatable()
 {
 }
@@ -17181,7 +17453,7 @@ bool TurtleLuaEngine::OnPlayerCommand(Player* player, std::string const& command
         lua_pushinteger(_state, PLAYER_EVENT_ON_COMMAND);
         PushPlayer(player);
         lua_pushlstring(_state, command.c_str(), command.size());
-        lua_pushnil(_state);
+        PushChatHandlerValue(_state, player);
 
         if (lua_pcall(_state, 4, 1, 0) != LUA_OK)
         {

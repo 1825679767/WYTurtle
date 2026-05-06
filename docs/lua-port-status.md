@@ -345,7 +345,7 @@ return "新的聊天内容"     -- 改写聊天内容
 - `37` 玩家从拾取中获得金币后触发，`amount` 是这次拾取到的铜币数量。修改金币请继续用 `14` 金币变化事件。
 - `38` 玩家主动放弃任务后触发，参数是 questId。当前挂在 `CMSG_QUESTLOG_REMOVE_QUEST` 处理路径里，不会因为任务失败或核心内部移除任务而触发。
 - `39` 玩家学习天赋后触发，参数是天赋 ID、天赋 rank 和实际学习的 spellId。
-- `42` 玩家或控制台尝试执行命令时触发，参数是玩家对象或 `nil`、命令文本和 `chatHandler`。Turtle 适配层暂时还没有 `ChatHandler` Lua 封装，所以第三个对象参数当前固定为 `nil`。返回 `false` 可以拦截命令并阻止核心继续解析，适合做 Lua 自定义 GM 命令。
+- `42` 玩家或控制台尝试执行命令时触发，参数是玩家对象或 `nil`、命令文本和 `chatHandler`。`ChatHandler` 已封装常用方法：`SendSysMessage`、`IsConsole`、`GetPlayer`、`SendGlobalSysMessage`、`SendGlobalGMSysMessage`、`HasLowerSecurity`、`HasLowerSecurityAccount`、`GetSelectedPlayer`、`GetSelectedCreature`、`GetSelectedUnit`、`GetSelectedObject`、`GetSelectedPlayerOrSelf`、`IsAvailable`、`HasSentErrorMessage`。返回 `false` 可以拦截命令并阻止核心继续解析，适合做 Lua 自定义 GM 命令。
 - `43` 玩家宠物或玩家召唤物加入世界后触发，参数是玩家和宠物/召唤物 Creature 对象。当前覆盖 `Pet::AddToWorld()`，并补充覆盖玩家作为召唤者的临时召唤物加入世界。
 - `44` 玩家学习法术后触发，参数是 spellId。当前只在角色已经在世界中并且核心确认本次确实学到新法术时触发；学习天赋法术时通常会同时触发 `39` 和 `44`。
 - `46` 玩家 FFA PvP 状态变化后触发，`hasFfaPvp` 表示变化后的状态。
@@ -2147,6 +2147,7 @@ Map 兼容说明：
 - `SpellInfo` 法术模板对象。
 - `SpellCastTargets` 物品使用目标对象。
 - `ObjectGuid` GUID 值对象。
+- `ChatHandler` 命令处理器基础对象。
 - `Aura` 光环实例基础对象。
 - 在线玩家列表、在线人数和已加载地图查询。
 - 全局定时器和对象绑定定时器。
