@@ -20,6 +20,7 @@
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "InstanceData.h"
+#include "LFGMgr.h"
 #include "Log.h"
 #include "Mail/Mail.h"
 #include "Map.h"
@@ -5488,6 +5489,53 @@ int PlayerLearnTalent(lua_State* state)
     return 0;
 }
 
+int PlayerAddTalent(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    uint32 spellId = static_cast<uint32>(luaL_checkinteger(state, 2));
+    uint8 spec = static_cast<uint8>(luaL_optinteger(state, 3, 0));
+    bool learning = lua_isnoneornil(state, 4) ? true : lua_toboolean(state, 4) != 0;
+
+    if (!player || spec != 0)
+    {
+        lua_pushboolean(state, false);
+        return 1;
+    }
+
+    if (player->HasSpell(spellId))
+    {
+        lua_pushboolean(state, true);
+        return 1;
+    }
+
+    if (!learning)
+    {
+        lua_pushboolean(state, false);
+        return 1;
+    }
+
+    uint32 numRows = sTalentStore.GetNumRows();
+    for (uint32 talentId = 0; talentId < numRows; ++talentId)
+    {
+        TalentEntry const* talent = sTalentStore.LookupEntry(talentId);
+        if (!talent)
+            continue;
+
+        for (uint32 rank = 0; rank < MAX_TALENT_RANK; ++rank)
+        {
+            if (talent->RankID[rank] != spellId)
+                continue;
+
+            player->LearnTalent(talent->TalentID, rank);
+            lua_pushboolean(state, player->HasSpell(spellId));
+            return 1;
+        }
+    }
+
+    lua_pushboolean(state, false);
+    return 1;
+}
+
 int PlayerResetTalents(lua_State* state)
 {
     Player* player = CheckPlayer(state, 1);
@@ -5670,7 +5718,14 @@ int PlayerIsUsingLfg(lua_State* state)
 {
     Player* player = CheckPlayer(state, 1);
     Group* group = player ? player->GetGroup() : nullptr;
-    lua_pushboolean(state, group && group->isInLFG());
+    lua_pushboolean(state, player && ((group && group->isInLFG()) || sLFGMgr.IsPlayerInQueue(player->GetObjectGuid())));
+    return 1;
+}
+
+int PlayerIsOutdoorPvPActive(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    lua_pushboolean(state, player && player->IsOutdoorPvPActive());
     return 1;
 }
 
@@ -5679,6 +5734,35 @@ int PlayerIsNeverVisible(lua_State* state)
     Player* player = CheckPlayer(state, 1);
     lua_pushboolean(state, player && !player->IsGMVisible());
     return 1;
+}
+
+int PlayerSetMovement(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    int32 movementType = static_cast<int32>(luaL_checkinteger(state, 2));
+
+    if (!player)
+        return 0;
+
+    switch (movementType)
+    {
+        case 1:
+            player->SetRooted(true);
+            break;
+        case 2:
+            player->SetRooted(false);
+            break;
+        case 3:
+            player->SetWaterWalking(true);
+            break;
+        case 4:
+            player->SetWaterWalking(false);
+            break;
+        default:
+            return luaL_argerror(state, 2, "valid PlayerMovementType value expected");
+    }
+
+    return 0;
 }
 
 int PlayerSetSpellPower(lua_State* state)
@@ -7634,17 +7718,33 @@ int PlayerRemoveQuest(lua_State* state)
 
 int PlayerRemoveRewardedQuest(lua_State* state)
 {
-    (void)CheckPlayer(state, 1);
-    (void)CheckQuestIdValue(state, 2);
+    Player* player = CheckPlayer(state, 1);
+    uint32 questId = CheckQuestIdValue(state, 2);
+
+    if (player)
+    {
+        QuestStatusMap& questStatusMap = player->getQuestStatusMap();
+        QuestStatusMap::iterator itr = questStatusMap.find(questId);
+        if (itr != questStatusMap.end())
+        {
+            itr->second.m_rewarded = false;
+            if (itr->second.uState != QUEST_NEW)
+                itr->second.uState = QUEST_CHANGED;
+        }
+    }
+
     return 0;
 }
 
 int PlayerKillGOCredit(lua_State* state)
 {
-    (void)CheckPlayer(state, 1);
-    (void)luaL_checkinteger(state, 2);
-    if (HasLuaArgument(state, 3))
-        (void)CheckObjectGuidValue(state, 3);
+    Player* player = CheckPlayer(state, 1);
+    uint32 entry = static_cast<uint32>(luaL_checkinteger(state, 2));
+    ObjectGuid guid = HasLuaArgument(state, 3) ? CheckObjectGuidValue(state, 3) : ObjectGuid();
+
+    if (player)
+        player->CastedCreatureOrGO(entry, guid, 0);
+
     return 0;
 }
 
@@ -7709,6 +7809,30 @@ int PlayerRemovePet(lua_State* state)
 
     if (player && player->GetPet())
         player->RemovePet(PetSaveMode(mode));
+
+    return 0;
+}
+
+int PlayerSummonPet(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    uint32 entry = static_cast<uint32>(luaL_checkinteger(state, 2));
+
+    if (HasLuaArgument(state, 3))
+        (void)luaL_checknumber(state, 3);
+    if (HasLuaArgument(state, 4))
+        (void)luaL_checknumber(state, 4);
+    if (HasLuaArgument(state, 5))
+        (void)luaL_checknumber(state, 5);
+    if (HasLuaArgument(state, 6))
+        (void)luaL_checknumber(state, 6);
+    if (HasLuaArgument(state, 7))
+        (void)luaL_checkinteger(state, 7);
+    if (HasLuaArgument(state, 8))
+        (void)luaL_checkinteger(state, 8);
+
+    if (player)
+        player->EffectSummonPet(0, entry, player->GetLevel());
 
     return 0;
 }
@@ -12958,8 +13082,8 @@ int GroupIsLFGGroup(lua_State* state)
 
 int GroupIsBFGroup(lua_State* state)
 {
-    (void)CheckGroup(state, 1);
-    lua_pushboolean(state, false);
+    Group* group = CheckGroup(state, 1);
+    lua_pushboolean(state, group && group->isBGGroup());
     return 1;
 }
 
@@ -17607,7 +17731,7 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "GetOriginalSubGroup", &PlayerGetOriginalSubGroup);
     SetMethod(_state, "GetGuild", &PlayerGetGuild);
     SetMethod(_state, "GetGuildName", &PlayerGetGuildName);
-    SetMethod(_state, "AddTalent", &PlayerCompatReturnFalse);
+    SetMethod(_state, "AddTalent", &PlayerAddTalent);
     SetMethod(_state, "AddBonusTalent", &PlayerCompatNoop);
     SetMethod(_state, "BindToInstance", &PlayerCompatNoop);
     SetMethod(_state, "CanFlyInZone", &PlayerCanFlyInZone);
@@ -17655,7 +17779,7 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "IsImmuneToEnvironmentalDamage", &PlayerIsImmuneToEnvironmentalDamage);
     SetMethod(_state, "IsInArenaTeam", &PlayerCompatReturnFalse);
     SetMethod(_state, "IsNeverVisible", &PlayerIsNeverVisible);
-    SetMethod(_state, "IsOutdoorPvPActive", &PlayerCompatReturnFalse);
+    SetMethod(_state, "IsOutdoorPvPActive", &PlayerIsOutdoorPvPActive);
     SetMethod(_state, "IsUsingLfg", &PlayerIsUsingLfg);
     SetMethod(_state, "LeaveBattleground", &PlayerLeaveBattleground);
     SetMethod(_state, "LogoutPlayer", &PlayerLogoutPlayer);
@@ -17693,11 +17817,11 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "SetGuildRank", &PlayerSetGuildRank);
     SetMethod(_state, "SetHonorPoints", &PlayerSetHonorPoints);
     SetMethod(_state, "SetKnownTitle", &PlayerSetKnownTitle);
-    SetMethod(_state, "SetMovement", &PlayerCompatNoop);
+    SetMethod(_state, "SetMovement", &PlayerSetMovement);
     SetMethod(_state, "SetPlayerLock", &PlayerSetPlayerLock);
     SetMethod(_state, "SetSpellPower", &PlayerSetSpellPower);
     SetMethod(_state, "StartTaxi", &PlayerStartTaxi);
-    SetMethod(_state, "SummonPet", &PlayerCompatNoop);
+    SetMethod(_state, "SummonPet", &PlayerSummonPet);
     SetMethod(_state, "SummonPlayer", &PlayerSummonPlayer);
     SetMethod(_state, "UnbindAllInstances", &PlayerUnbindAllInstances);
     SetMethod(_state, "UnbindInstance", &PlayerUnbindInstance);
