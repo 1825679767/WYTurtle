@@ -5583,6 +5583,22 @@ int PlayerCompatReturnNil(lua_State* state)
     return 1;
 }
 
+int PlayerSetSpellPower(lua_State* state)
+{
+    Player* player = CheckPlayer(state, 1);
+    int32 value = static_cast<int32>(luaL_checkinteger(state, 2));
+    bool apply = lua_isnoneornil(state, 3) ? false : lua_toboolean(state, 3) != 0;
+
+    if (!player)
+        return 0;
+
+    player->RemoveAurasDueToSpell(18058);
+    if (apply && value != 0)
+        player->CastCustomSpell(player, 18058, &value, &value, nullptr, true);
+
+    return 0;
+}
+
 int PlayerCanUninviteFromGroup(lua_State* state)
 {
     Player* player = CheckPlayer(state, 1);
@@ -17243,7 +17259,7 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "SetHonorPoints", &PlayerSetHonorPoints);
     SetMethod(_state, "SetKnownTitle", &PlayerSetKnownTitle);
     SetMethod(_state, "SetPlayerLock", &PlayerSetPlayerLock);
-    SetMethod(_state, "SetSpellPower", &PlayerCompatNoop);
+    SetMethod(_state, "SetSpellPower", &PlayerSetSpellPower);
     SetMethod(_state, "StartTaxi", &PlayerStartTaxi);
     SetMethod(_state, "SummonPlayer", &PlayerSummonPlayer);
     SetMethod(_state, "UnbindAllInstances", &PlayerUnbindAllInstances);
