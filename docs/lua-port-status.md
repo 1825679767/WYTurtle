@@ -70,7 +70,9 @@ E:\TurtleBY
 - DynamicObject 基础对象封装：地图按 GUID 反查和通用 `WorldObject` 返回路径现在可以返回 `DynamicObject` 对象；脚本可读取施法者、施法者 GUID、法术 ID、效果索引、持续时间、半径和动态对象类型，也可调用 `Delay()` / `Delete()`。
 - ElunaQuery 数据库结果对象：`WorldDBQuery` / `CharDBQuery` / `AuthDBQuery` 等现在返回 `ElunaQuery` 对象，支持 3.3.5 Eluna 风格的 `GetUInt32(0)`、`GetString(0)`、`NextRow()`、`GetRow()` 等对象方法；列下标按 Eluna 从 `0` 开始。
 - 全局兼容函数补齐：新增核心信息、Lua 状态信息、bit 位运算、毫秒时间、背包位置判断、日志打印、全局命令执行和全局定时事件清理入口。`GetCoreExpansion()` 按 Turtle 1.12 返回 `0`，`GetStateMap()` / `GetStateMapId()` / `GetStateInstanceId()` 按当前单 Lua 状态返回 `nil` / `-1` / `0`，`IsCompatibilityMode()` 返回 `true`。
-- 全局工具/管理函数补充：新增 `CreateLongLong`、`CreateULongLong`、`GetItemLink`、`GetAreaName`、`GetGuildByLeaderGUID`、`Kick`、`Ban`、`SaveAllPlayers`、`AddVendorItem`、`VendorRemoveItem`、`VendorRemoveAllItems`。其中 `Ban()` 调用 Turtle 当前异步封禁流程，合法请求会先返回 `3` 表示已进入处理队列；`AddVendorItem` 的第 5 个参数在 Turtle 1.12 中按 `itemflags` 使用，不是 3.3.5 的 extended cost。
+- 全局工具/管理函数补充：新增 `CreateLongLong`、`CreateULongLong`、`GetItemLink`、`GetAreaName`、`GetGuildByLeaderGUID`、`Kick`、`Ban`、`SaveAllPlayers`、`SendMail`、`AddVendorItem`、`VendorRemoveItem`、`VendorRemoveAllItems`。其中 `Ban()` 调用 Turtle 当前异步封禁流程，合法请求会先返回 `3` 表示已进入处理队列；`AddVendorItem` 的第 5 个参数在 Turtle 1.12 中按 `itemflags` 使用，不是 3.3.5 的 extended cost。
+- 全局游戏事件/地图/Gossip 函数补充：新增 `GetActiveGameEvents`、`IsGameEventActive`、`StartGameEvent`、`StopGameEvent`、`GetMapEntrance`、`GetGossipMenuOptionLocale`，均接入 Turtle 当前 `GameEventMgr` / `ObjectMgr` 真实接口。
+- 全局版本兼容占位：新增 `GetOwnerHalaa` / `SetOwnerHalaa`，Turtle 1.12 没有 TBC/WotLK 的纳格兰 Halaa 系统，因此当前只保持脚本兼容，不改变游戏状态。
 - SpellInfo 3.3.5 参考方法名补齐：`HasAreaAuraEffect`、`IsAffectingArea`、`IsTargetingArea`、`NeedsExplicitUnitTarget`、`GetSpellSpecific`、`GetDispelMask`、`CheckTarget`、`CheckExplicitTarget` 等。当前 `SpellInfoMethods.h` 参考方法差异为 `missing=0`，其中部分检查按 Turtle 1.12 能力做兼容近似。
 - SpellEntry 旧接口兼容补齐：`SpellEntryMethods.h` 的 92 个参考方法名已经并入 `SpellInfo` 元表，当前差异扫描为 `ref=92 target=165 missing=0`。本批补上了 `GetSpellName`、`GetDurationIndex`、`GetManaCostPerlevel`、`GetManaPerSecond`、`GetEquippedItemClass`、`GetEffectRealPointsPerLevel`、`GetEffectRadiusIndex`、`GetEffectDamageMultiplier`、`GetEffectBonusMultiplier`、`GetTotemCategory`、`GetAreaGroupId`、`GetRuneCostID` 等兼容入口；WotLK 专属字段按 Turtle 1.12 能力返回 `0` 或全 0 table。
 
@@ -159,6 +161,7 @@ RunCommand(command)
 Kick(player)
 Ban(mode, nameOrIP, durationSeconds[, reason[, author]])
 SaveAllPlayers()
+SendMail(subject, body, receiverGuidLow[, senderGuidLow[, stationery[, delay[, money[, cod[, itemEntry, amount]]]]]])
 GetPlayerByName(name)
 GetPlayerByGUID(guidOrGuidLow)
 GetPlayerByGUIDLow(guidLow)
@@ -183,6 +186,14 @@ GetItemTemplate(itemId)
 GetItemPrototype(itemId)
 GetItemLink(itemId[, locale])
 GetAreaName(areaOrZoneId[, locale])
+GetActiveGameEvents()
+IsGameEventActive(eventId)
+StartGameEvent(eventId[, force])
+StopGameEvent(eventId[, force])
+GetMapEntrance(mapId)
+GetGossipMenuOptionLocale(menuId, optionId, locale)
+GetOwnerHalaa()
+SetOwnerHalaa(teamId)
 GetCreatureTemplate(entry)
 GetCreatureInfo(entry)
 GetGameObjectTemplate(entry)
@@ -225,11 +236,17 @@ print(...)
 - `Kick(player)` 会断开指定玩家当前会话。
 - `Ban(mode, nameOrIP, durationSeconds[, reason[, author]])` 中 `mode` 为 `0` 账号、`1` 角色、`2` IP；Turtle 的封禁流程是异步查询账号/角色后再落库，所以合法请求通常先返回 `3`。
 - `SaveAllPlayers()` 会保存当前所有在线玩家。
+- `SendMail(...)` 使用 Turtle 的邮件系统发送文本、金币、COD 和物品附件；Turtle 1.12 当前 `MAX_MAIL_ITEMS = 1`，所以一次最多发送 1 个物品附件，成功创建附件时返回附件物品的低位 GUID。
 - `GetLuaEngine()` 为兼容旧 Eluna 脚本返回 `ElunaEngine`；`GetCoreName()` 返回 `Turtle WoW`；`GetCoreExpansion()` 在 Turtle 1.12 下返回 `0`。
 - `GetCurrTime()` 返回服务器毫秒计时，`GetTimeDiff(oldTime)` 返回 `oldTime` 到当前的毫秒差。
 - `CreateLongLong()` / `CreateULongLong()` 当前按 Lua 数值返回，能兼容常见数字/字符串入参；超过 Lua 数值安全范围的超大 `uint64` 后续还需要更完整的 userdata 包装。
 - `GetItemLink(itemId[, locale])` 会生成可点击物品链接；`locale` 使用 Turtle 的 `LocaleConstant`。
 - `GetAreaName(areaOrZoneId[, locale])` 从 `area_template` / 区域本地化表取名称，找不到会按 Eluna 风格报参数错误。
+- `GetActiveGameEvents()` 返回当前激活的游戏事件 ID 数组；`IsGameEventActive(eventId)` 返回指定事件是否激活。
+- `StartGameEvent(eventId[, force])` / `StopGameEvent(eventId[, force])` 调用 Turtle 的游戏事件管理器；`force=true` 对应核心里的强制覆盖启动/停止。
+- `GetMapEntrance(mapId)` 找到入口时返回 `x, y, z, o` 四个坐标值，找不到返回 `nil`。
+- `GetGossipMenuOptionLocale(menuId, optionId, locale)` 返回指定 gossip 菜单选项的本地化选项文本和弹窗文本；没有本地化时返回默认文本。
+- `GetOwnerHalaa()` / `SetOwnerHalaa(teamId)` 是 1.12 兼容占位；`GetOwnerHalaa()` 固定返回 `0, 0.0`，`SetOwnerHalaa(0/1)` 不执行状态变更。
 - `GetGuildByLeaderGUID(guid)` 支持传 `ObjectGuid`，也兼容传玩家低位 GUID 数字。
 - `AddVendorItem` / `VendorRemoveItem` / `VendorRemoveAllItems` 会同步更新内存商人列表和 `npc_vendor` 表；Turtle 1.12 没有 3.3.5 extended cost 字段，第 5 个参数当前映射为 `itemflags`。
 - `PrintInfo` / `PrintError` / `PrintDebug` 分别写入 info、error、debug 日志；`print(...)` 仍写普通 Lua 日志。

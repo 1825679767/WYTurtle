@@ -12,11 +12,13 @@
 #include "Group.h"
 #include "Guild.h"
 #include "GuildMgr.h"
+#include "GameEventMgr.h"
 #include "CellImpl.h"
 #include "GridNotifiers.h"
 #include "GridNotifiersImpl.h"
 #include "InstanceData.h"
 #include "Log.h"
+#include "Mail/Mail.h"
 #include "Map.h"
 #include "MapManager.h"
 #include "MapNodes/MasterPlayer.h"
@@ -1506,6 +1508,67 @@ int LuaSaveAllPlayers(lua_State* /*state*/)
     return 0;
 }
 
+int LuaSendMail(lua_State* state)
+{
+    int index = 0;
+    std::string subject = luaL_checkstring(state, ++index);
+    std::string body = luaL_checkstring(state, ++index);
+    uint32 receiverLow = static_cast<uint32>(luaL_checkinteger(state, ++index));
+    uint32 senderLow = static_cast<uint32>(luaL_optinteger(state, ++index, 0));
+    uint32 stationery = static_cast<uint32>(luaL_optinteger(state, ++index, MAIL_STATIONERY_DEFAULT));
+    uint32 delay = static_cast<uint32>(luaL_optinteger(state, ++index, 0));
+    uint32 money = static_cast<uint32>(luaL_optinteger(state, ++index, 0));
+    uint32 cod = static_cast<uint32>(luaL_optinteger(state, ++index, 0));
+
+    ObjectGuid receiverGuid(HIGHGUID_PLAYER, receiverLow);
+    Player* receiver = ObjectAccessor::FindPlayer(receiverGuid);
+    if (!receiver)
+    {
+        std::unique_ptr<QueryResult> result(CharacterDatabase.PQuery("SELECT `guid` FROM `characters` WHERE `guid` = '%u'", receiverLow));
+        if (!result)
+            return luaL_argerror(state, 3, "valid receiver player guid low expected");
+    }
+
+    MailDraft draft(subject, body);
+    if (money)
+        draft.SetMoney(money);
+    if (cod)
+        draft.SetCOD(cod);
+
+    uint8 addedItems = 0;
+    int argCount = lua_gettop(state);
+    while (index + 2 <= argCount)
+    {
+        if (addedItems >= MAX_MAIL_ITEMS)
+            return luaL_argerror(state, index + 1, "too many mail item attachments for this core");
+
+        uint32 entry = static_cast<uint32>(luaL_checkinteger(state, ++index));
+        uint32 amount = static_cast<uint32>(luaL_checkinteger(state, ++index));
+
+        ItemPrototype const* proto = sObjectMgr.GetItemPrototype(entry);
+        if (!proto)
+            return luaL_argerror(state, index - 1, "valid item entry expected");
+        if (amount < 1 || amount > proto->GetMaxStackSize() || (proto->MaxCount > 0 && amount > uint32(proto->MaxCount)))
+            return luaL_argerror(state, index, "valid item amount expected");
+
+        Item* item = Item::CreateItem(entry, amount, receiver);
+        if (!item)
+            return luaL_error(state, "failed to create mail item %u", entry);
+
+        item->SaveToDB();
+        draft.AddItem(item);
+        lua_pushinteger(state, item->GetGUIDLow());
+        ++addedItems;
+    }
+
+    if (index != argCount)
+        return luaL_argerror(state, index + 1, "item entry and amount expected");
+
+    MailSender sender(MAIL_NORMAL, senderLow, static_cast<MailStationery>(stationery));
+    draft.SendMailTo(MailReceiver(receiver, receiverGuid), sender, MAIL_CHECK_MASK_NONE, delay);
+    return addedItems;
+}
+
 int LuaRemoveEvents(lua_State* state)
 {
     bool allEvents = lua_isnoneornil(state, 1) ? false : lua_toboolean(state, 1) != 0;
@@ -2637,6 +2700,130 @@ int LuaGetAreaName(lua_State* state)
 
     lua_pushlstring(state, name.c_str(), name.size());
     return 1;
+}
+
+int LuaGetActiveGameEvents(lua_State* state)
+{
+    lua_newtable(state);
+    uint32 index = 1;
+    for (uint16 eventId : sGameEventMgr.GetActiveEventList())
+    {
+        lua_pushinteger(state, eventId);
+        lua_rawseti(state, -2, index++);
+    }
+
+    return 1;
+}
+
+int LuaIsGameEventActive(lua_State* state)
+{
+    uint16 eventId = static_cast<uint16>(luaL_checkinteger(state, 1));
+    lua_pushboolean(state, sGameEventMgr.IsActiveEvent(eventId));
+    return 1;
+}
+
+int LuaStartGameEvent(lua_State* state)
+{
+    uint16 eventId = static_cast<uint16>(luaL_checkinteger(state, 1));
+    bool force = lua_isnoneornil(state, 2) ? false : lua_toboolean(state, 2) != 0;
+    sGameEventMgr.StartEvent(eventId, force);
+    return 0;
+}
+
+int LuaStopGameEvent(lua_State* state)
+{
+    uint16 eventId = static_cast<uint16>(luaL_checkinteger(state, 1));
+    bool force = lua_isnoneornil(state, 2) ? false : lua_toboolean(state, 2) != 0;
+    sGameEventMgr.StopEvent(eventId, force);
+    return 0;
+}
+
+int LuaGetMapEntrance(lua_State* state)
+{
+    uint32 mapId = static_cast<uint32>(luaL_checkinteger(state, 1));
+    AreaTriggerTeleport const* trigger = sObjectMgr.GetMapEntranceTrigger(mapId);
+    if (!trigger)
+    {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    WorldLocation const& destination = trigger->destination;
+    lua_pushnumber(state, destination.x);
+    lua_pushnumber(state, destination.y);
+    lua_pushnumber(state, destination.z);
+    lua_pushnumber(state, destination.o);
+    return 4;
+}
+
+int LuaGetGossipMenuOptionLocale(lua_State* state)
+{
+    uint32 menuId = static_cast<uint32>(luaL_checkinteger(state, 1));
+    uint32 optionId = static_cast<uint32>(luaL_checkinteger(state, 2));
+    uint32 locale = static_cast<uint32>(luaL_checkinteger(state, 3));
+    if (locale >= MAX_LOCALE)
+        return luaL_argerror(state, 3, "valid LocaleConstant expected");
+
+    int localeIndex = sObjectMgr.GetIndexForLocale(static_cast<LocaleConstant>(locale));
+    std::string optionText;
+    std::string boxText;
+
+    if (localeIndex >= 0 && locale != LOCALE_enUS)
+    {
+        if (GossipMenuItemsLocale const* gossipLocale = sObjectMgr.GetGossipMenuItemsLocale(MAKE_PAIR32(menuId, optionId)))
+        {
+            if (gossipLocale->OptionText.size() > static_cast<size_t>(localeIndex) && !gossipLocale->OptionText[localeIndex].empty())
+                optionText = gossipLocale->OptionText[localeIndex];
+            if (gossipLocale->BoxText.size() > static_cast<size_t>(localeIndex) && !gossipLocale->BoxText[localeIndex].empty())
+                boxText = gossipLocale->BoxText[localeIndex];
+        }
+    }
+
+    GossipMenuItemsMapBounds bounds = sObjectMgr.GetGossipMenuItemsMapBounds(menuId);
+    for (auto itr = bounds.first; itr != bounds.second; ++itr)
+    {
+        GossipMenuItems const& item = itr->second;
+        if (item.id != optionId)
+            continue;
+
+        if (optionText.empty())
+        {
+            if (item.option_broadcast_text)
+                optionText = sObjectMgr.GetBroadcastText(item.option_broadcast_text, localeIndex, GENDER_MALE, false);
+            else
+                optionText = item.option_text;
+        }
+
+        if (boxText.empty())
+        {
+            if (item.box_broadcast_text)
+                boxText = sObjectMgr.GetBroadcastText(item.box_broadcast_text, localeIndex, GENDER_MALE, false);
+            else
+                boxText = item.box_text;
+        }
+
+        break;
+    }
+
+    lua_pushlstring(state, optionText.c_str(), optionText.size());
+    lua_pushlstring(state, boxText.c_str(), boxText.size());
+    return 2;
+}
+
+int LuaGetOwnerHalaa(lua_State* state)
+{
+    lua_pushinteger(state, 0);
+    lua_pushnumber(state, 0.0f);
+    return 2;
+}
+
+int LuaSetOwnerHalaa(lua_State* state)
+{
+    uint16 teamId = static_cast<uint16>(luaL_checkinteger(state, 1));
+    if (teamId > 1)
+        return luaL_argerror(state, 1, "0 for Alliance or 1 for Horde expected");
+
+    return 0;
 }
 
 int LuaGetCreatureTemplate(lua_State* state)
@@ -15199,6 +15386,7 @@ void TurtleLuaEngine::RegisterGlobals()
     lua_register(_state, "Kick", &LuaKick);
     lua_register(_state, "Ban", &LuaBan);
     lua_register(_state, "SaveAllPlayers", &LuaSaveAllPlayers);
+    lua_register(_state, "SendMail", &LuaSendMail);
     lua_register(_state, "GetPlayerByName", &LuaGetPlayerByName);
     lua_register(_state, "GetPlayerByGUID", &LuaGetPlayerByGUID);
     lua_register(_state, "GetPlayerByGUIDLow", &LuaGetPlayerByGUIDLow);
@@ -15222,6 +15410,14 @@ void TurtleLuaEngine::RegisterGlobals()
     lua_register(_state, "GetItemPrototype", &LuaGetItemTemplate);
     lua_register(_state, "GetItemLink", &LuaGetItemLink);
     lua_register(_state, "GetAreaName", &LuaGetAreaName);
+    lua_register(_state, "GetActiveGameEvents", &LuaGetActiveGameEvents);
+    lua_register(_state, "IsGameEventActive", &LuaIsGameEventActive);
+    lua_register(_state, "StartGameEvent", &LuaStartGameEvent);
+    lua_register(_state, "StopGameEvent", &LuaStopGameEvent);
+    lua_register(_state, "GetMapEntrance", &LuaGetMapEntrance);
+    lua_register(_state, "GetGossipMenuOptionLocale", &LuaGetGossipMenuOptionLocale);
+    lua_register(_state, "GetOwnerHalaa", &LuaGetOwnerHalaa);
+    lua_register(_state, "SetOwnerHalaa", &LuaSetOwnerHalaa);
     lua_register(_state, "GetCreatureTemplate", &LuaGetCreatureTemplate);
     lua_register(_state, "GetCreatureInfo", &LuaGetCreatureTemplate);
     lua_register(_state, "GetGameObjectTemplate", &LuaGetGameObjectTemplate);
