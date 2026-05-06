@@ -10323,6 +10323,13 @@ int CreatureHasSearchedAssistance(lua_State* state)
     return 1;
 }
 
+int CreatureGetCorpseDelay(lua_State* state)
+{
+    Creature* creature = CheckCreature(state, 1);
+    lua_pushinteger(state, creature ? creature->GetCorpseDelay() : 0);
+    return 1;
+}
+
 int CreatureGetLootMode(lua_State* state)
 {
     (void)CheckCreature(state, 1);
@@ -17785,7 +17792,7 @@ void TurtleLuaEngine::RegisterCreatureMetatable()
     SetMethod(_state, "GetAIName", &CreatureGetAIName);
     SetMethod(_state, "GetScriptId", &CreatureGetScriptId);
     SetMethod(_state, "GetCreatureSpellCooldownDelay", &CreatureGetCreatureSpellCooldownDelay);
-    SetMethod(_state, "GetCorpseDelay", &CreatureCompatReturnZero);
+    SetMethod(_state, "GetCorpseDelay", &CreatureGetCorpseDelay);
     SetMethod(_state, "GetHomePosition", &CreatureGetHomePosition);
     SetMethod(_state, "GetAITarget", &CreatureGetAITarget);
     SetMethod(_state, "GetAITargets", &CreatureGetAITargets);
