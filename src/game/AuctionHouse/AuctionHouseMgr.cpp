@@ -35,6 +35,9 @@
 #include "WorldPacket.h"
 #include "WorldSession.h"
 #include "Mail.h"
+#ifdef USE_LUA
+#include "TurtleLuaEngine.h"
+#endif
 
 #include "Policies/SingletonImp.h"
 
@@ -255,7 +258,6 @@ void AuctionHouseMgr::SendAuctionSuccessfulMail(AuctionEntry * auction)
 {
     ObjectGuid owner_guid = ObjectGuid(HIGHGUID_PLAYER, auction->owner);
     Player *owner = sObjectMgr.GetPlayer(owner_guid);
-
     uint32 owner_accId = 0;
     if (!owner)
         owner_accId = sObjectMgr.GetPlayerAccountIdByGUID(owner_guid);
@@ -269,6 +271,11 @@ void AuctionHouseMgr::SendAuctionSuccessfulMail(AuctionEntry * auction)
 
     if (isHardcore)
         return;
+
+#ifdef USE_LUA
+    Item* pItem = GetAItem(auction->itemGuidLow);
+    sTurtleLuaEngine.OnAuctionEvent(AUCTION_EVENT_ON_SUCCESSFUL, auction, pItem);
+#endif
 
     // owner exist
     if (owner || owner_accId)
@@ -337,6 +344,10 @@ void AuctionHouseMgr::SendAuctionExpiredMail(AuctionEntry * auction)
     // owner exist
     if ((owner || owner_accId) && !isHardcore)
     {
+#ifdef USE_LUA
+        sTurtleLuaEngine.OnAuctionEvent(AUCTION_EVENT_ON_EXPIRE, auction, pItem);
+#endif
+
         std::ostringstream subject;
         subject << auction->itemTemplate << ":0:" << AUCTION_EXPIRED;
 

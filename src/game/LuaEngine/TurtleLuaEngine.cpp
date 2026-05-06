@@ -1,6 +1,7 @@
 #include "TurtleLuaEngine.h"
 
 #include "AccountMgr.h"
+#include "AuctionHouseMgr.h"
 #include "BattleGround.h"
 #include "Chat.h"
 #include "Channel.h"
@@ -21338,6 +21339,49 @@ void TurtleLuaEngine::OnWeatherChange(uint32 zoneId, uint32 state, float grade)
         if (lua_pcall(_state, 4, 0, 0) != LUA_OK)
         {
             LogError("weather change event");
+            lua_pop(_state, 1);
+        }
+    }
+}
+
+void TurtleLuaEngine::OnAuctionEvent(uint32 eventId, AuctionEntry* entry, Item* item)
+{
+    std::lock_guard<std::recursive_mutex> guard(_lock);
+
+    if (!IsEnabled() || !entry || !item)
+        return;
+
+    auto itr = _serverEvents.find(eventId);
+    if (itr == _serverEvents.end())
+        return;
+
+    Player* owner = ObjectAccessor::FindPlayer(ObjectGuid(HIGHGUID_PLAYER, entry->owner));
+    if (!owner)
+        return;
+
+    std::vector<int> functionRefs = itr->second;
+    for (int functionRef : functionRefs)
+    {
+        lua_rawgeti(_state, LUA_REGISTRYINDEX, functionRef);
+        if (!lua_isfunction(_state, -1))
+        {
+            lua_pop(_state, 1);
+            continue;
+        }
+
+        lua_pushinteger(_state, eventId);
+        lua_pushinteger(_state, entry->Id);
+        PushPlayer(owner);
+        PushItem(item);
+        lua_pushinteger(_state, entry->expireTime);
+        lua_pushinteger(_state, entry->buyout);
+        lua_pushinteger(_state, entry->startbid);
+        lua_pushinteger(_state, entry->bid);
+        lua_pushinteger(_state, entry->bidder);
+
+        if (lua_pcall(_state, 9, 0, 0) != LUA_OK)
+        {
+            LogError("auction event");
             lua_pop(_state, 1);
         }
     }

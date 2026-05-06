@@ -95,6 +95,7 @@ E:\TurtleBY
 - 全局工单事件补充：新增 `RegisterTicketEvent`、`ClearTicketEvents`，并接入工单创建、玩家更新文本、关闭事件；新增 `Ticket` 对象封装，当前 `TicketMethods.h` 参考方法差异为 `ref=25 target=25 missing=0`。Turtle 1.12 没有独立的自动 resolve 核心流程，`4` 号 resolve 事件当前会在 Lua 调用 `ticket:SetResolvedBy()` 或 `ticket:SetCompleted()` 时触发。
 - GameObject 破坏/受伤事件补充：`RegisterGameObjectEvent(entry, 7, ...)` / `8` 已接入法术把 GameObject 切换到 destroyed/alternative 状态的真实路径，参数为 `(event, go, attacker)`。Turtle 1.12 没有 3.3.5 的可破坏建筑血量系统，所以 `8` 只会在这些显式破坏动作前作为兼容受伤事件触发，不代表持续扣血。
 - 全局 AreaTrigger / Weather 事件补充：`RegisterServerEvent(24, ...)` 已在玩家触发合法 AreaTrigger 后、原有脚本/传送逻辑前触发，参数为 `(event, player, triggerId)`，回调返回 `true` 会阻止后续默认处理；`RegisterServerEvent(25, ...)` 已在天气实际发送给区域玩家后触发，参数为 `(event, zoneId, state, grade)`。
+- 全局 Auction 事件补充：`RegisterServerEvent(26..29, ...)` 已接入拍卖创建、取消、成交、过期流程，参数为 `(event, auctionId, owner, item, expireTime, buyout, startBid, currentBid, bidderGUIDLow)`；和参考 Eluna 一样，拥有者不在线或物品对象不存在时不会触发。
 - 全局出租路径函数补充：新增 `AddTaxiPath(waypoints, mountA, mountH[, price[, pathId]])`，会在运行时创建临时 TaxiNode、TaxiPath 和 TaxiPathNode 数据，并返回可传给 `player:StartTaxi(pathId)` 的路径 ID。Lua 的 `Player:StartTaxi()` 当前按脚本入口跳过已知飞行点检查，以便自定义路径可直接使用。
 - SpellInfo 3.3.5 参考方法名补齐：`HasAreaAuraEffect`、`IsAffectingArea`、`IsTargetingArea`、`NeedsExplicitUnitTarget`、`GetSpellSpecific`、`GetDispelMask`、`CheckTarget`、`CheckExplicitTarget` 等。当前 `SpellInfoMethods.h` 参考方法差异为 `missing=0`，其中部分检查按 Turtle 1.12 能力做兼容近似。
 - SpellEntry 旧接口兼容补齐：`SpellEntryMethods.h` 的 92 个参考方法名已经并入 `SpellInfo` 元表，当前差异扫描为 `ref=92 target=165 missing=0`。本批补上了 `GetSpellName`、`GetDurationIndex`、`GetManaCostPerlevel`、`GetManaPerSecond`、`GetEquippedItemClass`、`GetEffectRealPointsPerLevel`、`GetEffectRadiusIndex`、`GetEffectDamageMultiplier`、`GetEffectBonusMultiplier`、`GetTotemCategory`、`GetAreaGroupId`、`GetRuneCostID` 等兼容入口；WotLK 专属字段按 Turtle 1.12 能力返回 `0` 或全 0 table。
@@ -2683,6 +2684,7 @@ end
 - Creature / GameObject / Item 的任务、Gossip、使用入口，以及 GameObject 显式破坏/兼容受伤事件。
 - Item DummyEffect、Expire、Remove 事件。
 - AreaTrigger 触发和 Weather 变化事件。
+- Auction 创建、取消、成交、过期事件。
 - 动态 `Spell` 对象和 Prepare / Cast / Cancel 施法事件。
 - `Quest` 对象。
 - `ItemTemplate` 物品模板对象。

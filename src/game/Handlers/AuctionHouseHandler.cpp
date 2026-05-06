@@ -33,6 +33,9 @@
 #include "Util.h"
 #include "Chat.h"
 #include "Anticheat.h"
+#ifdef USE_LUA
+#include "TurtleLuaEngine.h"
+#endif
 
 extern bool IsPlayerHardcore(uint32 lowGuid);
 // please DO NOT use iterator++, because it is slower than ++iterator!!!
@@ -429,6 +432,9 @@ void WorldSession::HandleAuctionSellItem(WorldPacket & recv_data)
 
     sAuctionMgr.AddAItem(it);
     pl->MoveItemFromInventory(it->GetBagSlot(), it->GetSlot(), true);
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnAuctionEvent(AUCTION_EVENT_ON_ADD, AH, it);
+#endif
 
     CharacterDatabase.BeginTransaction(pl->GetGUIDLow());
     it->DeleteFromInventoryDB();
@@ -624,10 +630,11 @@ void WorldSession::HandleAuctionRemoveItem(WorldPacket & recv_data)
 
     AuctionEntry *auction = auctionHouse->GetAuction(auctionId);
     Player *pl = GetPlayer();
+    Item* pItem = nullptr;
 
     if (auction && auction->owner == pl->GetGUIDLow())
     {
-        Item *pItem = sAuctionMgr.GetAItem(auction->itemGuidLow);
+        pItem = sAuctionMgr.GetAItem(auction->itemGuidLow);
         if (pItem)
         {
             if (auction->bidder > 0)                        // If we have a bidder, we have to send him the money he paid
@@ -665,6 +672,9 @@ void WorldSession::HandleAuctionRemoveItem(WorldPacket & recv_data)
 
     // inform player, that auction is removed
     SendAuctionCommandResult(auction, AUCTION_REMOVED, AUCTION_OK);
+#ifdef USE_LUA
+    sTurtleLuaEngine.OnAuctionEvent(AUCTION_EVENT_ON_REMOVE, auction, pItem);
+#endif
     // Now remove the auction
     CharacterDatabase.BeginTransaction(pl->GetGUIDLow());
     auction->DeleteFromDB();

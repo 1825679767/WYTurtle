@@ -34,6 +34,7 @@ class WorldSession;
 class SpellCastTargets;
 class ObjectGuid;
 class QueryNamedResult;
+struct AuctionEntry;
 struct ItemPrototype;
 
 enum TurtleLuaPlayerEvents
@@ -120,6 +121,10 @@ enum TurtleLuaServerEvents
     MAP_EVENT_ON_UPDATE = 23,
     TRIGGER_EVENT_ON_TRIGGER = 24,
     WEATHER_EVENT_ON_CHANGE = 25,
+    AUCTION_EVENT_ON_ADD = 26,
+    AUCTION_EVENT_ON_REMOVE = 27,
+    AUCTION_EVENT_ON_SUCCESSFUL = 28,
+    AUCTION_EVENT_ON_EXPIRE = 29,
     ADDON_EVENT_ON_MESSAGE = 30,
     ELUNA_EVENT_ON_LUA_STATE_OPEN = 33,
     GAME_EVENT_START = 34,
@@ -273,6 +278,7 @@ public:
     void OnGameEventStop(uint32 gameEventId);
     bool OnAreaTrigger(Player* player, uint32 triggerId);
     void OnWeatherChange(uint32 zoneId, uint32 state, float grade);
+    void OnAuctionEvent(uint32 eventId, AuctionEntry* entry, Item* item);
 
     void OnPlayerLogin(Player* player);
     void OnPlayerLogout(Player* player);
