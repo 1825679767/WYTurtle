@@ -34,6 +34,22 @@ class DBCStorage
 
         T const* LookupEntry(uint32 id) const { return (id>=nCount)?nullptr:indexTable[id]; }
         bool InsertEntry(uint32 id, T* data) { if (id >= nCount) return false; indexTable[id] = data; return true; }
+        bool SetEntry(uint32 id, T* data)
+        {
+            if (id >= nCount)
+            {
+                T** newIndexTable = new T*[id + 1]();
+                for (uint32 i = 0; i < nCount; ++i)
+                    newIndexTable[i] = indexTable ? indexTable[i] : nullptr;
+
+                delete[] ((char*)indexTable);
+                indexTable = newIndexTable;
+                nCount = id + 1;
+            }
+
+            indexTable[id] = data;
+            return true;
+        }
 
         uint32  GetNumRows() const { return nCount; }
         char const* GetFormat() const { return fmt; }

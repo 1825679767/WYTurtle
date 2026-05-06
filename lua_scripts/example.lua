@@ -47,6 +47,20 @@ end)
 --     print("Ticket closed: #" .. ticket:GetId() .. " closed=" .. tostring(ticket:IsClosed()))
 -- end)
 
+-- 自定义飞行路径示例。把坐标换成角色附近坐标后，可在脚本里调用 player:StartTaxi(pathId)。
+-- local sampleTaxiPath = AddTaxiPath({
+--     {0, -8949.95, -132.49, 83.53},
+--     {0, -8935.00, -180.00, 120.00},
+--     {0, -8900.00, -220.00, 90.00},
+-- }, 541, 2224)
+--
+-- RegisterPlayerEvent(18, function(event, player, message)
+--     if message == "#taxi" and sampleTaxiPath then
+--         player:StartTaxi(sampleTaxiPath)
+--         return false
+--     end
+-- end)
+
 CreateLuaEvent(function(eventId)
     print("Lua timed event " .. eventId .. " is alive")
 end, 60000, 0)

@@ -802,6 +802,7 @@ class ObjectMgr
         void LoadTaxiNodes();
         TaxiNodesEntry const* GetTaxiNodeEntry(uint32 id) const { return id < GetMaxTaxiNodeId() ? m_TaxiNodes[id].get() : nullptr; }
         uint32 GetMaxTaxiNodeId() const { return m_TaxiNodes.size(); }
+        void AddTaxiNodeEntry(std::unique_ptr<TaxiNodesEntry> node);
 
         Quest const* GetQuestTemplate(uint32 quest_id) const
         {

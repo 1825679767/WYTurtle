@@ -81,6 +81,7 @@ E:\TurtleBY
 - 全局 Map/Instance 副本事件补充：新增 `RegisterMapEvent`、`RegisterInstanceEvent`、`ClearMapEvents`、`ClearInstanceEvents`。`RegisterMapEvent(mapId, eventId, function)` 按地图 ID 绑定该地图所有副本实例；`RegisterInstanceEvent(instanceId, eventId, function)` 按运行时实例 ID 绑定单个实例。同一副本事件会先执行 mapId 绑定，再执行 instanceId 绑定。当前已触发事件 `1` 初始化、`2` 加载、`3` 更新、`4` 玩家进入、`5` Creature 创建、`6` GameObject 创建；事件 `7` 检查战斗进度还没有统一安全触发点，暂不触发。
 - 全局战场事件补充：新增 `RegisterBGEvent`、`ClearBattleGroundEvents`，并接入战场创建、开始、结束和销毁前事件；新增 `BattleGround` 对象封装，当前 `BattleGroundMethods.h` 参考方法差异为 `ref=17 target=19 missing=0`。当前沿用本兼容层现有事件注册语义，不返回取消函数，`shots` 参数暂未实现。
 - 全局工单事件补充：新增 `RegisterTicketEvent`、`ClearTicketEvents`，并接入工单创建、玩家更新文本、关闭事件；新增 `Ticket` 对象封装，当前 `TicketMethods.h` 参考方法差异为 `ref=25 target=25 missing=0`。Turtle 1.12 没有独立的自动 resolve 核心流程，`4` 号 resolve 事件当前会在 Lua 调用 `ticket:SetResolvedBy()` 或 `ticket:SetCompleted()` 时触发。
+- 全局出租路径函数补充：新增 `AddTaxiPath(waypoints, mountA, mountH[, price[, pathId]])`，会在运行时创建临时 TaxiNode、TaxiPath 和 TaxiPathNode 数据，并返回可传给 `player:StartTaxi(pathId)` 的路径 ID。Lua 的 `Player:StartTaxi()` 当前按脚本入口跳过已知飞行点检查，以便自定义路径可直接使用。
 - SpellInfo 3.3.5 参考方法名补齐：`HasAreaAuraEffect`、`IsAffectingArea`、`IsTargetingArea`、`NeedsExplicitUnitTarget`、`GetSpellSpecific`、`GetDispelMask`、`CheckTarget`、`CheckExplicitTarget` 等。当前 `SpellInfoMethods.h` 参考方法差异为 `missing=0`，其中部分检查按 Turtle 1.12 能力做兼容近似。
 - SpellEntry 旧接口兼容补齐：`SpellEntryMethods.h` 的 92 个参考方法名已经并入 `SpellInfo` 元表，当前差异扫描为 `ref=92 target=165 missing=0`。本批补上了 `GetSpellName`、`GetDurationIndex`、`GetManaCostPerlevel`、`GetManaPerSecond`、`GetEquippedItemClass`、`GetEffectRealPointsPerLevel`、`GetEffectRadiusIndex`、`GetEffectDamageMultiplier`、`GetEffectBonusMultiplier`、`GetTotemCategory`、`GetAreaGroupId`、`GetRuneCostID` 等兼容入口；WotLK 专属字段按 Turtle 1.12 能力返回 `0` 或全 0 table。
 
@@ -234,6 +235,7 @@ GetPlayersInWorld()
 GetPlayerCount()
 GetMapById(mapId, instanceId)
 PerformIngameSpawn(spawnType, entry, mapId, instanceId, x, y, z, o[, save[, durationOrRespawn[, phaseMask]]])
+AddTaxiPath(waypoints, mountA, mountH[, price[, pathId]])
 AddVendorItem(creatureEntry, itemEntry[, maxCount[, incrTime[, itemFlags]]])
 VendorRemoveItem(creatureEntry, itemEntry)
 VendorRemoveAllItems(creatureEntry)
@@ -289,6 +291,7 @@ print(...)
 - `GetPlayerCount()` 返回当前在线且在世界中的玩家数量。
 - `GetMapById(mapId, instanceId)` 只查找已经加载的地图，找不到时返回 `nil`。
 - `PerformIngameSpawn(1, ...)` 出生生物，`PerformIngameSpawn(2, ...)` 出生游戏物体；`save=true` 会写入 world 数据库，`durationOrRespawn` 对临时出生表示消失时间、对保存出生表示重生时间，`phaseMask` 当前映射到 Turtle 的 world mask。
+- `AddTaxiPath(waypoints, mountA, mountH[, price[, pathId]])` 的 `waypoints` 格式为 `{ {mapId, x, y, z[, actionFlag[, delay]]}, ... }`，至少需要 2 个点。`mountA` 是联盟坐骑 Creature entry，`mountH` 是部落坐骑 Creature entry；`pathId` 不传时自动选择运行时可用 ID，传入已存在 ID 会报错，避免覆盖原始飞行路线。
 - `GetPlayerByGUID()` 现在可以传 `ObjectGuid` 对象，也可以继续传玩家 `guidLow` 数字。
 - `GetPlayerByGUIDLow(guidLow)` 是按玩家低位 GUID 找在线玩家的兼容别名。
 - `CreateObjectGuid(high, counter)` 用于没有 entry 部分的 GUID，例如玩家和物品。
@@ -2639,7 +2642,7 @@ end
 - 3.3.5 专属成就、竞技场点数、铭文/双天赋、LFG 和部分邮件/拍卖/银行/训练师细节目前仍是兼容返回或空入口，后续需要按 Turtle 1.12 的真实系统单独补强。
 - 3.3.5 玩家事件里 `45` 成就完成和 `50` LFG 入队检查没有 Turtle 1.12 等价系统，当前不接入。
 - 载具 Vehicle 对象和真实载具系统在 Turtle 1.12 中不存在，当前只有 `IsOnVehicle` / `GetVehicle` / `GetVehicleKit` 兼容空入口。
-- 全局公开函数剩余缺口为 `AddTaxiPath`、`WorldDBQueryAsync`、`CharDBQueryAsync`、`AuthDBQueryAsync`、`HttpRequest`；`RegisterEntryHelper`、`RegisterEventHelper`、`RegisterUniqueHelper`、`DBQueryAsync` 是 Eluna C++ 内部 helper，不是需要暴露给 Lua 脚本的公开 API。
+- 全局公开函数剩余缺口为 `WorldDBQueryAsync`、`CharDBQueryAsync`、`AuthDBQueryAsync`、`HttpRequest`；`RegisterEntryHelper`、`RegisterEventHelper`、`RegisterUniqueHelper`、`DBQueryAsync` 是 Eluna C++ 内部 helper，不是需要暴露给 Lua 脚本的公开 API。
 
 ## 335 专属功能说明
 

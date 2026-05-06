@@ -284,6 +284,9 @@ public:
     using ChatHandler::GetSelectedUnit;
 };
 
+std::vector<std::unique_ptr<TaxiPathEntry>> g_luaTaxiPaths;
+std::vector<std::unique_ptr<TaxiPathNodeEntry>> g_luaTaxiPathNodes;
+
 void UnrefFunctionRefs(lua_State* state, std::vector<int>& refs)
 {
     if (state)
@@ -3120,6 +3123,148 @@ int LuaGetGuildByLeaderGUID(lua_State* state)
     return 1;
 }
 
+int LuaAddTaxiPath(lua_State* state)
+{
+    luaL_checktype(state, 1, LUA_TTABLE);
+    uint32 mountA = static_cast<uint32>(luaL_checkinteger(state, 2));
+    uint32 mountH = static_cast<uint32>(luaL_checkinteger(state, 3));
+    uint32 price = static_cast<uint32>(luaL_optinteger(state, 4, 0));
+    uint32 pathId = static_cast<uint32>(luaL_optinteger(state, 5, 0));
+
+    std::vector<TaxiPathNodeEntry> nodes;
+    size_t count = lua_rawlen(state, 1);
+    nodes.reserve(count);
+
+    for (size_t i = 1; i <= count; ++i)
+    {
+        lua_rawgeti(state, 1, static_cast<int>(i));
+        if (!lua_istable(state, -1))
+        {
+            lua_pop(state, 1);
+            return luaL_argerror(state, 1, "all waypoints must be tables");
+        }
+
+        int waypoint = lua_absindex(state, -1);
+        TaxiPathNodeEntry entry{};
+
+        lua_rawgeti(state, waypoint, 1);
+        if (lua_isnil(state, -1))
+        {
+            lua_pop(state, 2);
+            return luaL_argerror(state, 1, "waypoint map id is required");
+        }
+        entry.mapid = static_cast<uint32>(luaL_checkinteger(state, -1));
+        lua_pop(state, 1);
+
+        lua_rawgeti(state, waypoint, 2);
+        if (lua_isnil(state, -1))
+        {
+            lua_pop(state, 2);
+            return luaL_argerror(state, 1, "waypoint x is required");
+        }
+        entry.x = static_cast<float>(luaL_checknumber(state, -1));
+        lua_pop(state, 1);
+
+        lua_rawgeti(state, waypoint, 3);
+        if (lua_isnil(state, -1))
+        {
+            lua_pop(state, 2);
+            return luaL_argerror(state, 1, "waypoint y is required");
+        }
+        entry.y = static_cast<float>(luaL_checknumber(state, -1));
+        lua_pop(state, 1);
+
+        lua_rawgeti(state, waypoint, 4);
+        if (lua_isnil(state, -1))
+        {
+            lua_pop(state, 2);
+            return luaL_argerror(state, 1, "waypoint z is required");
+        }
+        entry.z = static_cast<float>(luaL_checknumber(state, -1));
+        lua_pop(state, 1);
+
+        lua_rawgeti(state, waypoint, 5);
+        entry.actionFlag = lua_isnil(state, -1) ? 0 : static_cast<uint32>(luaL_checkinteger(state, -1));
+        lua_pop(state, 1);
+
+        lua_rawgeti(state, waypoint, 6);
+        entry.delay = lua_isnil(state, -1) ? 0 : static_cast<uint32>(luaL_checkinteger(state, -1));
+        lua_pop(state, 1);
+
+        nodes.push_back(entry);
+        lua_pop(state, 1);
+    }
+
+    if (nodes.size() < 2)
+    {
+        lua_pushnil(state);
+        return 1;
+    }
+
+    if (pathId)
+    {
+        if (sTaxiPathStore.LookupEntry(pathId) || (pathId < sTaxiPathNodesByPath.size() && !sTaxiPathNodesByPath[pathId].empty()))
+            return luaL_argerror(state, 5, "taxi path id already exists");
+    }
+    else
+    {
+        pathId = std::max<uint32>(sTaxiPathStore.GetNumRows(), static_cast<uint32>(sTaxiPathNodesByPath.size()));
+        while (sTaxiPathStore.LookupEntry(pathId) || (pathId < sTaxiPathNodesByPath.size() && !sTaxiPathNodesByPath[pathId].empty()))
+            ++pathId;
+    }
+
+    uint32 nextNodeId = std::max<uint32>(sObjectMgr.GetMaxTaxiNodeId(), 1);
+    while (sObjectMgr.GetTaxiNodeEntry(nextNodeId))
+        ++nextNodeId;
+
+    uint32 startNode = nextNodeId;
+    uint32 nodeIndex = 0;
+
+    if (sTaxiPathNodesByPath.size() <= pathId)
+        sTaxiPathNodesByPath.resize(pathId + 1);
+
+    sTaxiPathNodesByPath[pathId].clear();
+    sTaxiPathNodesByPath[pathId].resize(nodes.size());
+
+    for (TaxiPathNodeEntry& entry : nodes)
+    {
+        auto taxiNode = std::make_unique<TaxiNodesEntry>();
+        taxiNode->ID = nextNodeId;
+        taxiNode->map_id = entry.mapid;
+        taxiNode->x = entry.x;
+        taxiNode->y = entry.y;
+        taxiNode->z = entry.z;
+        taxiNode->name[0] = "Lua Taxi Node";
+        taxiNode->MountCreatureID[0] = mountH;
+        taxiNode->MountCreatureID[1] = mountA;
+        sObjectMgr.AddTaxiNodeEntry(std::move(taxiNode));
+
+        entry.path = pathId;
+        entry.index = nodeIndex;
+        auto storedNode = std::make_unique<TaxiPathNodeEntry>(entry);
+        TaxiPathNodeEntry* storedNodePtr = storedNode.get();
+        g_luaTaxiPathNodes.push_back(std::move(storedNode));
+        sTaxiPathNodesByPath[pathId].set(nodeIndex, storedNodePtr);
+
+        ++nextNodeId;
+        ++nodeIndex;
+    }
+
+    auto pathEntry = std::make_unique<TaxiPathEntry>();
+    pathEntry->ID = pathId;
+    pathEntry->from = startNode;
+    pathEntry->to = nextNodeId - 1;
+    pathEntry->price = price;
+    TaxiPathEntry* pathEntryPtr = pathEntry.get();
+    g_luaTaxiPaths.push_back(std::move(pathEntry));
+
+    sTaxiPathStore.SetEntry(pathId, pathEntryPtr);
+    sTaxiPathSetBySource[startNode][nextNodeId - 1] = TaxiPathBySourceAndDestination(pathId, price);
+
+    lua_pushinteger(state, pathId);
+    return 1;
+}
+
 int LuaAddVendorItem(lua_State* state)
 {
     uint32 entry = static_cast<uint32>(luaL_checkinteger(state, 1));
@@ -5902,7 +6047,7 @@ int PlayerStartTaxi(lua_State* state)
     Player* player = CheckPlayer(state, 1);
     uint32 pathId = static_cast<uint32>(luaL_checkinteger(state, 2));
     if (player)
-        player->ActivateTaxiPathTo(pathId);
+        player->ActivateTaxiPathTo(pathId, 0, true);
     return 0;
 }
 
@@ -16218,6 +16363,7 @@ void TurtleLuaEngine::RegisterGlobals()
     lua_register(_state, "GetPlayerCount", &LuaGetPlayerCount);
     lua_register(_state, "GetMapById", &LuaGetMapById);
     lua_register(_state, "PerformIngameSpawn", &LuaPerformIngameSpawn);
+    lua_register(_state, "AddTaxiPath", &LuaAddTaxiPath);
     lua_register(_state, "AddVendorItem", &LuaAddVendorItem);
     lua_register(_state, "VendorRemoveItem", &LuaVendorRemoveItem);
     lua_register(_state, "VendorRemoveAllItems", &LuaVendorRemoveAllItems);

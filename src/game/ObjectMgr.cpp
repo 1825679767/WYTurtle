@@ -6818,6 +6818,18 @@ void ObjectMgr::LoadTaxiNodes()
     }
 }
 
+void ObjectMgr::AddTaxiNodeEntry(std::unique_ptr<TaxiNodesEntry> node)
+{
+    if (!node)
+        return;
+
+    uint32 id = node->ID;
+    if (m_TaxiNodes.size() <= id)
+        m_TaxiNodes.resize(id + 1);
+
+    m_TaxiNodes[id] = std::move(node);
+}
+
 void ObjectMgr::LoadTaxiPathTransitions()
 {
     m_TaxiPathTransitions.clear();                                            // need for reload case
