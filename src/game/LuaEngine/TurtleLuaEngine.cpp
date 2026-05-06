@@ -3549,22 +3549,6 @@ int LuaGetGossipMenuOptionLocale(lua_State* state)
     return 2;
 }
 
-int LuaGetOwnerHalaa(lua_State* state)
-{
-    lua_pushinteger(state, 0);
-    lua_pushnumber(state, 0.0f);
-    return 2;
-}
-
-int LuaSetOwnerHalaa(lua_State* state)
-{
-    uint16 teamId = static_cast<uint16>(luaL_checkinteger(state, 1));
-    if (teamId > 1)
-        return luaL_argerror(state, 1, "0 for Alliance or 1 for Horde expected");
-
-    return 0;
-}
-
 int LuaGetCreatureTemplate(lua_State* state)
 {
     uint32 entry = static_cast<uint32>(luaL_checkinteger(state, 1));
@@ -5870,12 +5854,6 @@ int PlayerGetGuildName(lua_State* state)
     return 1;
 }
 
-int PlayerCompatNoop(lua_State* state)
-{
-    (void)CheckPlayer(state, 1);
-    return 0;
-}
-
 int PlayerCompatReturnZero(lua_State* state)
 {
     (void)CheckPlayer(state, 1);
@@ -6931,14 +6909,6 @@ int PlayerSendShowBank(lua_State* state)
     WorldObject* object = CheckWorldObject(state, 2);
     if (player && player->GetSession() && object)
         player->GetSession()->SendShowBank(object->GetObjectGuid());
-    return 0;
-}
-
-int PlayerSendShowMailBox(lua_State* state)
-{
-    (void)CheckPlayer(state, 1);
-    if (!lua_isnoneornil(state, 2))
-        (void)CheckObjectGuidValue(state, 2);
     return 0;
 }
 
@@ -8233,12 +8203,6 @@ int PlayerKillGOCredit(lua_State* state)
     if (player)
         player->CastedCreatureOrGO(entry, guid, 0);
 
-    return 0;
-}
-
-int PlayerKilledPlayerCredit(lua_State* state)
-{
-    (void)CheckPlayer(state, 1);
     return 0;
 }
 
@@ -9694,13 +9658,6 @@ int UnitSetPetGUID(lua_State* state)
     return 0;
 }
 
-int UnitSetCritterGUID(lua_State* state)
-{
-    CheckUnit(state, 1);
-    CheckObjectGuid(state, 2);
-    return 0;
-}
-
 int UnitSetName(lua_State* state)
 {
     Unit* unit = CheckUnit(state, 1);
@@ -10258,12 +10215,6 @@ int UnitGetPetGUID(lua_State* state)
     return 1;
 }
 
-int UnitGetCritterGUID(lua_State* state)
-{
-    lua_pushinteger(state, 0);
-    return 1;
-}
-
 int UnitGetControllerGUID(lua_State* state)
 {
     Unit* unit = CheckUnit(state, 1);
@@ -10444,12 +10395,6 @@ int CreatureSetRespawnDelay(lua_State* state)
     uint32 delay = static_cast<uint32>(luaL_checkinteger(state, 2));
     if (creature)
         creature->SetRespawnDelay(delay);
-    return 0;
-}
-
-int CreatureCompatNoop(lua_State* state)
-{
-    (void)CheckCreature(state, 1);
     return 0;
 }
 
@@ -13818,12 +13763,6 @@ int GroupConvertToRaid(lua_State* state)
     return 0;
 }
 
-int GroupConvertToLFG(lua_State* state)
-{
-    (void)CheckGroup(state, 1);
-    return 0;
-}
-
 int GroupSetMembersGroup(lua_State* state)
 {
     Group* group = CheckGroup(state, 1);
@@ -14147,27 +14086,6 @@ int GuildUpdateMemberData(lua_State* state)
     return 0;
 }
 
-int GuildMassInviteToEvent(lua_State* state)
-{
-    CheckGuild(state, 1);
-    CheckPlayer(state, 2);
-    return 0;
-}
-
-int GuildSwapItems(lua_State* state)
-{
-    CheckGuild(state, 1);
-    CheckPlayer(state, 2);
-    return 0;
-}
-
-int GuildSwapItemsWithInventory(lua_State* state)
-{
-    CheckGuild(state, 1);
-    CheckPlayer(state, 2);
-    return 0;
-}
-
 int GuildGetTotalBankMoney(lua_State* state)
 {
     Guild* guild = CheckGuild(state, 1);
@@ -14196,12 +14114,6 @@ int GuildGetCreatedDate(lua_State* state)
 
     lua_pushinteger(state, value);
     return 1;
-}
-
-int GuildResetTimes(lua_State* state)
-{
-    CheckGuild(state, 1);
-    return 0;
 }
 
 int GuildModifyBankMoney(lua_State* state)
@@ -17933,8 +17845,6 @@ void TurtleLuaEngine::RegisterGlobals()
     lua_register(_state, "StopGameEvent", &LuaStopGameEvent);
     lua_register(_state, "GetMapEntrance", &LuaGetMapEntrance);
     lua_register(_state, "GetGossipMenuOptionLocale", &LuaGetGossipMenuOptionLocale);
-    lua_register(_state, "GetOwnerHalaa", &LuaGetOwnerHalaa);
-    lua_register(_state, "SetOwnerHalaa", &LuaSetOwnerHalaa);
     lua_register(_state, "GetCreatureTemplate", &LuaGetCreatureTemplate);
     lua_register(_state, "GetCreatureInfo", &LuaGetCreatureTemplate);
     lua_register(_state, "GetGameObjectTemplate", &LuaGetGameObjectTemplate);
@@ -18137,8 +18047,6 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "SetCreatorGuid", &UnitSetCreatorGUID);
     SetMethod(_state, "SetPetGUID", &UnitSetPetGUID);
     SetMethod(_state, "SetPetGuid", &UnitSetPetGUID);
-    SetMethod(_state, "SetCritterGUID", &UnitSetCritterGUID);
-    SetMethod(_state, "SetCritterGuid", &UnitSetCritterGUID);
     SetMethod(_state, "SetName", &UnitSetName);
     SetMethod(_state, "SetImmuneTo", &UnitSetImmuneTo);
     SetMethod(_state, "IsUnderWater", &UnitIsUnderWater);
@@ -18203,8 +18111,6 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "GetMinionGuid", &UnitGetPetGUID);
     SetMethod(_state, "GetPetGUID", &UnitGetPetGUID);
     SetMethod(_state, "GetPetGuid", &UnitGetPetGUID);
-    SetMethod(_state, "GetCritterGUID", &UnitGetCritterGUID);
-    SetMethod(_state, "GetCritterGuid", &UnitGetCritterGUID);
     SetMethod(_state, "GetControllerGUID", &UnitGetControllerGUID);
     SetMethod(_state, "GetControllerGuid", &UnitGetControllerGUID);
     SetMethod(_state, "GetControllerGUIDS", &UnitGetControllerGUIDS);
@@ -18360,7 +18266,6 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "SendPacket", &PlayerSendPacket);
     SetMethod(_state, "SendQuestTemplate", &PlayerSendQuestTemplate);
     SetMethod(_state, "SendShowBank", &PlayerSendShowBank);
-    SetMethod(_state, "SendShowMailBox", &PlayerSendShowMailBox);
     SetMethod(_state, "SendSpiritResurrect", &PlayerSendSpiritResurrect);
     SetMethod(_state, "SendTabardVendorActivate", &PlayerSendTabardVendorActivate);
     SetMethod(_state, "SendTaxiMenu", &PlayerSendTaxiMenu);
@@ -18565,7 +18470,6 @@ void TurtleLuaEngine::RegisterPlayerMetatable()
     SetMethod(_state, "RemoveActiveQuest", &PlayerRemoveQuest);
     SetMethod(_state, "RemoveRewardedQuest", &PlayerRemoveRewardedQuest);
     SetMethod(_state, "KillGOCredit", &PlayerKillGOCredit);
-    SetMethod(_state, "KilledPlayerCredit", &PlayerKilledPlayerCredit);
     SetMethod(_state, "KilledMonsterCredit", &PlayerKilledMonsterCredit);
     SetMethod(_state, "TalkedToCreature", &PlayerTalkedToCreature);
     SetMethod(_state, "AreaExploredOrEventHappens", &PlayerAreaExploredOrEventHappens);
@@ -18773,8 +18677,6 @@ void TurtleLuaEngine::RegisterCreatureMetatable()
     SetMethod(_state, "SetCreatorGuid", &UnitSetCreatorGUID);
     SetMethod(_state, "SetPetGUID", &UnitSetPetGUID);
     SetMethod(_state, "SetPetGuid", &UnitSetPetGUID);
-    SetMethod(_state, "SetCritterGUID", &UnitSetCritterGUID);
-    SetMethod(_state, "SetCritterGuid", &UnitSetCritterGUID);
     SetMethod(_state, "SetName", &UnitSetName);
     SetMethod(_state, "SetImmuneTo", &UnitSetImmuneTo);
     SetMethod(_state, "IsInWater", &UnitIsInWater);
@@ -18842,8 +18744,6 @@ void TurtleLuaEngine::RegisterCreatureMetatable()
     SetMethod(_state, "GetMinionGuid", &UnitGetPetGUID);
     SetMethod(_state, "GetPetGUID", &UnitGetPetGUID);
     SetMethod(_state, "GetPetGuid", &UnitGetPetGUID);
-    SetMethod(_state, "GetCritterGUID", &UnitGetCritterGUID);
-    SetMethod(_state, "GetCritterGuid", &UnitGetCritterGUID);
     SetMethod(_state, "GetControllerGUID", &UnitGetControllerGUID);
     SetMethod(_state, "GetControllerGuid", &UnitGetControllerGUID);
     SetMethod(_state, "GetControllerGUIDS", &UnitGetControllerGUIDS);
@@ -19705,7 +19605,6 @@ void TurtleLuaEngine::RegisterGroupMetatable()
     SetMethod(_state, "RemoveMember", &GroupRemoveMember);
     SetMethod(_state, "Disband", &GroupDisband);
     SetMethod(_state, "ConvertToRaid", &GroupConvertToRaid);
-    SetMethod(_state, "ConvertToLFG", &GroupConvertToLFG);
     SetMethod(_state, "SetMembersGroup", &GroupSetMembersGroup);
     SetMethod(_state, "SetTargetIcon", &GroupSetTargetIcon);
     SetMethod(_state, "SetMemberFlag", &GroupSetMemberFlag);
@@ -19746,12 +19645,8 @@ void TurtleLuaEngine::RegisterGuildMetatable()
     SetMethod(_state, "SetMemberRank", &GuildSetMemberRank);
     SetMethod(_state, "SetName", &GuildSetName);
     SetMethod(_state, "UpdateMemberData", &GuildUpdateMemberData);
-    SetMethod(_state, "MassInviteToEvent", &GuildMassInviteToEvent);
-    SetMethod(_state, "SwapItems", &GuildSwapItems);
-    SetMethod(_state, "SwapItemsWithInventory", &GuildSwapItemsWithInventory);
     SetMethod(_state, "GetTotalBankMoney", &GuildGetTotalBankMoney);
     SetMethod(_state, "GetCreatedDate", &GuildGetCreatedDate);
-    SetMethod(_state, "ResetTimes", &GuildResetTimes);
     SetMethod(_state, "ModifyBankMoney", &GuildModifyBankMoney);
     lua_setfield(_state, -2, "__index");
 
