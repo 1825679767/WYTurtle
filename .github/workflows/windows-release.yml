@@ -42,40 +42,10 @@ jobs:
         with:
           arch: x64
 
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
-
       - name: Verify MSVC
         shell: pwsh
         run: |
           cl
-
-      - name: Resolve Visual Studio
-        shell: pwsh
-        run: |
-          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-          if (-not (Test-Path -LiteralPath $vswhere)) {
-              throw "vswhere.exe was not found at $vswhere"
-          }
-
-          $vsPath = & $vswhere `
-            -latest `
-            -products * `
-            -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 `
-            -property installationPath
-
-          if ([string]::IsNullOrWhiteSpace($vsPath)) {
-              & $vswhere -all -products * -format json
-              throw "Cannot find a Visual Studio installation with VC.Tools.x86.x64"
-          }
-
-          $vcvars = Join-Path $vsPath "VC\Auxiliary\Build\vcvars64.bat"
-          if (-not (Test-Path -LiteralPath $vcvars)) {
-              throw "Cannot find vcvars64.bat under $vsPath"
-          }
-
-          "VS_INSTALL_DIR=$vsPath" >> $env:GITHUB_ENV
-          Write-Host "Using Visual Studio: $vsPath"
 
       - name: Resolve release metadata
         id: meta
@@ -161,20 +131,10 @@ jobs:
           $installDir = Join-Path $env:GITHUB_WORKSPACE "install"
           $aceRoot = Join-Path $env:VCPKG_ROOT "installed\x64-windows"
 
-          if (Test-Path -LiteralPath $buildDir) {
-              Remove-Item -LiteralPath $buildDir -Recurse -Force
-          }
-
-          Remove-Item Env:CC -ErrorAction SilentlyContinue
-          Remove-Item Env:CXX -ErrorAction SilentlyContinue
-          cmake --version
-
           cmake -S "$env:GITHUB_WORKSPACE" `
                 -B "$buildDir" `
                 -G "Visual Studio 17 2022" `
                 -A x64 `
-                -T v143,host=x64 `
-                -DCMAKE_GENERATOR_INSTANCE="$env:VS_INSTALL_DIR" `
                 -DPREFIX="$installDir" `
                 -DACE_ROOT="$aceRoot" `
                 -DUSE_LUA=ON `
