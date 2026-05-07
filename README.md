@@ -162,7 +162,7 @@ cmake --build <build_dir> --config Release --target realmd -- /m
 只编译 Lua 语法检查工具：
 
 ```powershell
-cmake --build <build_dir> --config Release --target lua_compiler -- /m
+cmake --build <build_dir> --config Release --target lua52_compiler -- /m
 ```
 
 安装完成后，`<install_dir>` 中应包含：
@@ -179,29 +179,6 @@ lua52_compiler.exe
 
 ```powershell
 <install_dir>\lua52_compiler.exe -p <script_file.lua>
-```
-
-## GitHub Actions 发布
-
-仓库内提供了 Windows 自动编译和 Release 发布工作流：
-
-```text
-.github/workflows/windows-release.yml
-```
-
-使用方式：
-
-1. 在 GitHub 仓库页面打开 `Actions`。
-2. 选择 `Windows Release`。
-3. 点击 `Run workflow`。
-4. 填写 `release_tag`，例如 `v1.0.0`。如果留空，会使用 `manual-运行编号`。
-5. 工作流会自动准备 ACE、MySQL 5.7 客户端库和 OpenSSL，编译 `Release`，生成压缩包并发布到 `Releases`。
-
-也可以推送 `v*` 标签触发发布：
-
-```powershell
-git tag v1.0.0
-git push origin v1.0.0
 ```
 
 ## 数据库准备

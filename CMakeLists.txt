@@ -463,45 +463,33 @@ set(CMAKE_INSTALL_RPATH ${LIBS_DIR})
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 if(WIN32)
-  file(GLOB WINDOWS_RELEASE_DLLS CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/dep/windows/lib/${DEP_ARCH}_release/*.dll"
+  install(
+    FILES
+      ${CMAKE_SOURCE_DIR}/dep/windows/lib/${DEP_ARCH}_release/libeay32.dll
+      ${CMAKE_SOURCE_DIR}/dep/windows/lib/${DEP_ARCH}_release/libmySQL.dll
+    DESTINATION ${LIBS_DIR}
+    CONFIGURATIONS Release
   )
-  file(GLOB WINDOWS_DEBUG_DLLS CONFIGURE_DEPENDS
-    "${CMAKE_SOURCE_DIR}/dep/windows/lib/${DEP_ARCH}_debug/*.dll"
+  install(
+    FILES
+      ${CMAKE_SOURCE_DIR}/dep/windows/lib/${DEP_ARCH}_debug/libeay32.dll
+      ${CMAKE_SOURCE_DIR}/dep/windows/lib/${DEP_ARCH}_debug/libmySQL.dll
+    DESTINATION ${LIBS_DIR}
+    CONFIGURATIONS Debug
   )
-
-  if(WINDOWS_RELEASE_DLLS)
-    install(
-      FILES
-        ${WINDOWS_RELEASE_DLLS}
-      DESTINATION ${LIBS_DIR}
-      CONFIGURATIONS Release
-    )
-  endif()
-
-  if(WINDOWS_DEBUG_DLLS)
-    install(
-      FILES
-        ${WINDOWS_DEBUG_DLLS}
-      DESTINATION ${LIBS_DIR}
-      CONFIGURATIONS Debug
-    )
-  endif()
-
   if(PLATFORM MATCHES X86)
+    # Copy dll's Windows needs
     install(
       FILES
         ${CMAKE_SOURCE_DIR}/dep/windows/lib/win32_release/dbghelp.dll
       DESTINATION ${LIBS_DIR}
       CONFIGURATIONS Release
-      OPTIONAL
     )
     install(
       FILES
         ${CMAKE_SOURCE_DIR}/dep/windows/lib/win32_debug/dbghelp.dll
       DESTINATION ${LIBS_DIR}
       CONFIGURATIONS Debug
-      OPTIONAL
     )
   endif()
 endif()
