@@ -2,7 +2,6 @@
   "$schema": "https://raw.githubusercontent.com/microsoft/vcpkg-tool/main/docs/vcpkg.schema.json",
   "name": "wyturtle-build-deps",
   "version-string": "0.1.0",
-  "builtin-baseline": "443dda0f876acb0baf87a907e6d64e25a1184c16",
   "dependencies": [
     "ace",
     "openssl"
