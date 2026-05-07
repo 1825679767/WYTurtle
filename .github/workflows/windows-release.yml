@@ -61,19 +61,6 @@ jobs:
           "$cmakeBin" >> $env:GITHUB_PATH
           & $cmakeExe --version
 
-      - name: Setup MSVC
-        uses: ilammy/msvc-dev-cmd@v1
-        with:
-          arch: x64
-
-      - name: Setup MSBuild
-        uses: microsoft/setup-msbuild@v2
-
-      - name: Verify MSVC
-        shell: pwsh
-        run: |
-          cl
-
       - name: Resolve Visual Studio
         shell: pwsh
         run: |
@@ -100,6 +87,13 @@ jobs:
 
           "VS_INSTALL_DIR=$vsPath" >> $env:GITHUB_ENV
           Write-Host "Using Visual Studio: $vsPath"
+
+      - name: Verify MSVC
+        shell: cmd
+        run: |
+          call "%VS_INSTALL_DIR%\VC\Auxiliary\Build\vcvars64.bat"
+          cl
+          nmake /?
 
       - name: Resolve release metadata
         id: meta
@@ -179,37 +173,26 @@ jobs:
             -MySqlVersion "$env:MYSQL_VERSION"
 
       - name: Configure CMake
-        shell: pwsh
+        shell: cmd
         run: |
-          $buildDir = Join-Path $env:GITHUB_WORKSPACE "build"
-          $installDir = Join-Path $env:GITHUB_WORKSPACE "install"
-          $aceRoot = Join-Path $env:VCPKG_ROOT "installed\x64-windows"
-
-          if (Test-Path -LiteralPath $buildDir) {
-              Remove-Item -LiteralPath $buildDir -Recurse -Force
-          }
-
-          Remove-Item Env:CC -ErrorAction SilentlyContinue
-          Remove-Item Env:CXX -ErrorAction SilentlyContinue
-          & "$env:CMAKE_EXE" --version
-
-          & "$env:CMAKE_EXE" -S "$env:GITHUB_WORKSPACE" `
-                -B "$buildDir" `
-                -G "Visual Studio 17 2022" `
-                -A x64 `
-                -T v143,host=x64 `
-                -DCMAKE_GENERATOR_INSTANCE="$env:VS_INSTALL_DIR" `
-                -DPREFIX="$installDir" `
-                -DACE_ROOT="$aceRoot" `
-                -DUSE_LUA=ON `
-                -DUSE_SCRIPTS=ON `
-                -DUSE_DISCORD_BOT=OFF
+          call "%VS_INSTALL_DIR%\VC\Auxiliary\Build\vcvars64.bat"
+          if exist "%GITHUB_WORKSPACE%\build" rmdir /s /q "%GITHUB_WORKSPACE%\build"
+          "%CMAKE_EXE%" --version
+          "%CMAKE_EXE%" -S "%GITHUB_WORKSPACE%" ^
+            -B "%GITHUB_WORKSPACE%\build" ^
+            -G "NMake Makefiles" ^
+            -DCMAKE_BUILD_TYPE="%BUILD_TYPE%" ^
+            -DPREFIX="%GITHUB_WORKSPACE%\install" ^
+            -DACE_ROOT="%VCPKG_ROOT%\installed\x64-windows" ^
+            -DUSE_LUA=ON ^
+            -DUSE_SCRIPTS=ON ^
+            -DUSE_DISCORD_BOT=OFF
 
       - name: Build and install
-        shell: pwsh
+        shell: cmd
         run: |
-          $buildDir = Join-Path $env:GITHUB_WORKSPACE "build"
-          & "$env:CMAKE_EXE" --build "$buildDir" --config "$env:BUILD_TYPE" --target INSTALL -- /m
+          call "%VS_INSTALL_DIR%\VC\Auxiliary\Build\vcvars64.bat"
+          "%CMAKE_EXE%" --build "%GITHUB_WORKSPACE%\build" --target install
 
       - name: Verify installed files
         shell: pwsh
