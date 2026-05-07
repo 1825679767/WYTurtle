@@ -44,6 +44,7 @@
 #include <string>
 #include <map>
 #include <limits>
+#include <optional>
 
 extern SQLStorage sCreatureDataLinkGroupStorage;
 

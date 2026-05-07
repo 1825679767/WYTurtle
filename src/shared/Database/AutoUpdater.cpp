@@ -8,6 +8,7 @@
 #include <openssl/sha.h>
 #include <fstream>
 #include <memory>
+#include <optional>
 #include <iterator>
 #include <istream>
 #include <locale>

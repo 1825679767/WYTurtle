@@ -132,9 +132,9 @@ if(WIN32)
     endif()
   endif()
   
-  # Added by Giperion, in WIN32 output all compiled files in one directory
-  set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/bin )
-  set( CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/lib )
+  # Keep generated binaries out of the source tree.
+  set( CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin )
+  set( CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib )
   # Allow creating folders in solution
   set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 endif()
@@ -260,16 +260,18 @@ endif()
 
 # Win32 delifered packages
 if(WIN32)
-  set(MYSQL_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/dep/windows/include/mysql)
-  set(MYSQL_LIBRARY ${CMAKE_SOURCE_DIR}/dep/windows/lib/${DEP_ARCH}_release/libmySQL.lib)
-  set(MYSQL_DEBUG_LIBRARY ${CMAKE_SOURCE_DIR}/dep/windows/lib/${DEP_ARCH}_debug/libmySQL.lib)
-  set(OPENSSL_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/dep/windows/include/openssl)
-  set(OPENSSL_LIBRARIES ${CMAKE_SOURCE_DIR}/dep/windows/lib/${DEP_ARCH}_release/libssl.lib ${CMAKE_SOURCE_DIR}/dep/windows/lib/${DEP_ARCH}_release/libcrypto.lib)
-  set(OPENSSL_DEBUG_LIBRARIES ${CMAKE_SOURCE_DIR}/dep/windows/lib/${DEP_ARCH}_debug/libssl.lib ${CMAKE_SOURCE_DIR}/dep/windows/lib/${DEP_ARCH}_debug/libcrypto.lib)
-  set(ZLIB_INCLUDE_DIRS ${CMAKE_SOURCE_DIR}/dep/windows/include/zlib)
+  set(WINDOWS_DEP_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/dep/windows/include CACHE PATH "Windows dependency include root")
+  set(WINDOWS_DEP_LIB_DIR ${CMAKE_SOURCE_DIR}/dep/windows/lib CACHE PATH "Windows dependency library root")
+  set(MYSQL_INCLUDE_DIR ${WINDOWS_DEP_INCLUDE_DIR}/mysql CACHE PATH "MySQL include directory")
+  set(MYSQL_LIBRARY ${WINDOWS_DEP_LIB_DIR}/${DEP_ARCH}_release/libmySQL.lib CACHE FILEPATH "MySQL release library")
+  set(MYSQL_DEBUG_LIBRARY ${WINDOWS_DEP_LIB_DIR}/${DEP_ARCH}_debug/libmySQL.lib CACHE FILEPATH "MySQL debug library")
+  set(OPENSSL_INCLUDE_DIR ${WINDOWS_DEP_INCLUDE_DIR}/openssl CACHE PATH "OpenSSL include directory")
+  set(OPENSSL_LIBRARIES ${WINDOWS_DEP_LIB_DIR}/${DEP_ARCH}_release/libssl.lib ${WINDOWS_DEP_LIB_DIR}/${DEP_ARCH}_release/libcrypto.lib CACHE STRING "OpenSSL release libraries")
+  set(OPENSSL_DEBUG_LIBRARIES ${WINDOWS_DEP_LIB_DIR}/${DEP_ARCH}_debug/libssl.lib ${WINDOWS_DEP_LIB_DIR}/${DEP_ARCH}_debug/libcrypto.lib CACHE STRING "OpenSSL debug libraries")
+  set(ZLIB_INCLUDE_DIRS ${WINDOWS_DEP_INCLUDE_DIR}/zlib CACHE PATH "Zlib include directory")
 
   set(OPTICK_INCLUDE_DIR ${CMAKE_SOURCE_DIR}/dep/include/optick)
-  set(OPTICK_LIBRARY ${CMAKE_SOURCE_DIR}/dep/windows/lib/${DEP_ARCH}_release/OptickCore.lib)
+  set(OPTICK_LIBRARY ${WINDOWS_DEP_LIB_DIR}/${DEP_ARCH}_release/OptickCore.lib CACHE FILEPATH "Optick release library")
 endif()
 
 # *nix-specific packages

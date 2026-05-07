@@ -20,6 +20,9 @@
  */
 
 #include "ObjectMgr.h"
+
+#include <optional>
+
 #include "Database/DatabaseEnv.h"
 #include "Database/DatabaseImpl.h"
 #include "Database/SQLStorageImpl.h"

@@ -1,5 +1,7 @@
 #include "DynamicVisibilityMgr.h"
 
+#include <optional>
+
 DynamicVisibilityMgr sDynamicVisMgr;
 
 void DynamicVisibilityMgr::LoadFromDB(bool reload)
@@ -73,4 +75,3 @@ std::optional<uint32> DynamicVisibilityMgr::GetDynamicVisibility(uint32 areaId)
 
     return {};
 }
-

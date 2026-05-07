@@ -1,4 +1,6 @@
 ﻿#include "GameObjectAI.h"
+#include <optional>
+
 #include "AccountMgr.h"
 #include "Anticheat.h"
 #include "AsyncCommandHandlers.h"

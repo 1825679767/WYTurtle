@@ -50,6 +50,7 @@
 #include <cstddef>
 #include <any>
 #include <deque>
+#include <optional>
 
 struct Mail;
 class Channel;
