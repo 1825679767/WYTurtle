@@ -42,12 +42,10 @@ jobs:
         with:
           arch: x64
 
-      - name: Setup Ninja
+      - name: Verify MSVC
         shell: pwsh
         run: |
-          choco install ninja --no-progress -y
           cl
-          ninja --version
 
       - name: Resolve release metadata
         id: meta
@@ -135,8 +133,8 @@ jobs:
 
           cmake -S "$env:GITHUB_WORKSPACE" `
                 -B "$buildDir" `
-                -G "Ninja" `
-                -DCMAKE_BUILD_TYPE="$env:BUILD_TYPE" `
+                -G "Visual Studio 17 2022" `
+                -A x64 `
                 -DPREFIX="$installDir" `
                 -DACE_ROOT="$aceRoot" `
                 -DUSE_LUA=ON `
@@ -147,7 +145,7 @@ jobs:
         shell: pwsh
         run: |
           $buildDir = Join-Path $env:GITHUB_WORKSPACE "build"
-          cmake --build "$buildDir" --target install --parallel
+          cmake --build "$buildDir" --config "$env:BUILD_TYPE" --target INSTALL -- /m
 
       - name: Verify installed files
         shell: pwsh
