@@ -192,6 +192,7 @@ source_group("DiscordBot"
 )
 
 include_directories(
+  ${CMAKE_BINARY_DIR}/src/shared
   ${CMAKE_CURRENT_SOURCE_DIR}
   ${CMAKE_SOURCE_DIR}/dep/include
   ${CMAKE_SOURCE_DIR}/dep/libdeflate

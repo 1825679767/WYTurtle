@@ -321,9 +321,13 @@ else()
     set(rev_date "1970-01-01 00:00:00 +0000")
     set(rev_hash "unknown")
   endif()
-  
-  configure_file(${CMAKE_CURRENT_SOURCE_DIR}/cmake/revision.h.cmake ${CMAKE_CURRENT_SOURCE_DIR}/src/shared/revision.h)
 endif()
+
+file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/src/shared)
+configure_file(
+  ${CMAKE_CURRENT_SOURCE_DIR}/cmake/revision.h.cmake
+  ${CMAKE_CURRENT_BINARY_DIR}/src/shared/revision.h
+)
 
 message(STATUS "")
 message(STATUS "Core revision: ${rev_hash} ${rev_date} ")
@@ -465,33 +469,48 @@ set(CMAKE_INSTALL_RPATH ${LIBS_DIR})
 set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
 
 if(WIN32)
+  set(WINDOWS_RUNTIME_RELEASE_DLLS
+    ${WINDOWS_DEP_LIB_DIR}/${DEP_ARCH}_release/libeay32.dll
+    ${WINDOWS_DEP_LIB_DIR}/${DEP_ARCH}_release/libmySQL.dll
+    ${WINDOWS_DEP_LIB_DIR}/${DEP_ARCH}_release/libssl-1_1-x64.dll
+    ${WINDOWS_DEP_LIB_DIR}/${DEP_ARCH}_release/libcrypto-1_1-x64.dll
+    ${WINDOWS_DEP_LIB_DIR}/${DEP_ARCH}_release/OptickCore.dll
+  )
+  set(WINDOWS_RUNTIME_DEBUG_DLLS
+    ${WINDOWS_DEP_LIB_DIR}/${DEP_ARCH}_debug/libeay32.dll
+    ${WINDOWS_DEP_LIB_DIR}/${DEP_ARCH}_debug/libmySQL.dll
+    ${WINDOWS_DEP_LIB_DIR}/${DEP_ARCH}_debug/libssl-1_1-x64.dll
+    ${WINDOWS_DEP_LIB_DIR}/${DEP_ARCH}_debug/libcrypto-1_1-x64.dll
+    ${WINDOWS_DEP_LIB_DIR}/${DEP_ARCH}_release/OptickCore.dll
+  )
+
   install(
-    FILES
-      ${CMAKE_SOURCE_DIR}/dep/windows/lib/${DEP_ARCH}_release/libeay32.dll
-      ${CMAKE_SOURCE_DIR}/dep/windows/lib/${DEP_ARCH}_release/libmySQL.dll
+    FILES ${WINDOWS_RUNTIME_RELEASE_DLLS}
     DESTINATION ${LIBS_DIR}
-    CONFIGURATIONS Release
+    CONFIGURATIONS Release RelWithDebInfo MinSizeRel
+    OPTIONAL
   )
   install(
-    FILES
-      ${CMAKE_SOURCE_DIR}/dep/windows/lib/${DEP_ARCH}_debug/libeay32.dll
-      ${CMAKE_SOURCE_DIR}/dep/windows/lib/${DEP_ARCH}_debug/libmySQL.dll
+    FILES ${WINDOWS_RUNTIME_DEBUG_DLLS}
     DESTINATION ${LIBS_DIR}
     CONFIGURATIONS Debug
+    OPTIONAL
   )
   if(PLATFORM MATCHES X86)
     # Copy dll's Windows needs
     install(
       FILES
-        ${CMAKE_SOURCE_DIR}/dep/windows/lib/win32_release/dbghelp.dll
+        ${WINDOWS_DEP_LIB_DIR}/win32_release/dbghelp.dll
       DESTINATION ${LIBS_DIR}
       CONFIGURATIONS Release
+      OPTIONAL
     )
     install(
       FILES
-        ${CMAKE_SOURCE_DIR}/dep/windows/lib/win32_debug/dbghelp.dll
+        ${WINDOWS_DEP_LIB_DIR}/win32_debug/dbghelp.dll
       DESTINATION ${LIBS_DIR}
       CONFIGURATIONS Debug
+      OPTIONAL
     )
   endif()
 endif()
