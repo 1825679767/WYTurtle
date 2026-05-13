@@ -146,10 +146,10 @@ find_package(Git)
 message(STATUS
   "\nThis script builds the MaNGOS server.
   Options that can be used in order to configure the process:
-    PREFIX: Path where the server should be installed to
+    CMAKE_INSTALL_PREFIX: Path where the server should be installed to
     USE_PCH: Use precompiled headers
   To set an option simply type -D<OPTION>=<VALUE> after 'cmake <srcs>'.
-  For example: cmake .. -DPREFIX=/opt/mangos\n"
+  For example: cmake .. -DCMAKE_INSTALL_PREFIX=/opt/mangos\n"
 ) # TODO: PLATFORM: Sets the architecture for compile (X86,X64)
 
 if(NOT CMAKE_BUILD_TYPE)
@@ -182,16 +182,6 @@ endif()
 if(CMAKE_INSTALL_PREFIX STREQUAL "/usr/local")
   get_filename_component(PREFIX_ABSOLUTE "../server" ABSOLUTE)
   set(CMAKE_INSTALL_PREFIX ${PREFIX_ABSOLUTE} CACHE PATH "Install path prefix." FORCE)
-endif()
-
-if(PREFIX)
-  if(!WIN32)
-    string(REGEX REPLACE "^~" "$ENV{HOME}" PREFIX ${PREFIX})
-  endif()
-  get_filename_component(PREFIX_ABSOLUTE ${PREFIX} ABSOLUTE)
-  set(CMAKE_INSTALL_PREFIX ${PREFIX} CACHE PATH "Install path prefix." FORCE)
-else()
-  set(PREFIX ${CMAKE_INSTALL_PREFIX} CACHE PATH "Install path prefix.")
 endif()
 
 # If win32 put it in the bin dir not lib
