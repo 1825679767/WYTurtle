@@ -23,6 +23,19 @@ README.md            项目说明和 Windows 编译教程
 
 ## 编译前说明
 
+本文中的目录全部是示例目录，不要求必须使用同一个盘符。实际使用时，只要把命令中的路径统一替换成你自己的目录即可。
+
+建议始终把下面四类目录分开：
+
+```text
+源码目录
+构建目录
+运行目录
+第三方依赖目录
+```
+
+这样做的好处是：源码仓库会更干净，重新配置 CMake 时也更方便清理。
+
 
 ## 示例目录规划
 
@@ -50,6 +63,24 @@ Git for Windows
 MySQL Server 5.7 x64
 ACE
 ```
+
+## 当前参考环境
+
+下面这套环境是当前维护和编译时使用的参考环境。第一次搭环境时，建议尽量保持一致：
+
+```text
+Windows 10 / Windows 11 x64
+Visual Studio 2022 Community
+MSVC 14.44.35207
+Windows SDK 10.0.26100.0
+CMake 3.27.9
+Git for Windows 2.46.0
+ACE 7.1.3
+生成器：Visual Studio 17 2022
+推荐模式：RelWithDebInfo 或 Release
+```
+
+当前仓库默认构建选项为 `USE_LUA=ON`、`USE_SCRIPTS=ON`、`USE_STD_MALLOC=ON`。首次搭建建议优先使用 `ACE 7.1.3`。
 
 默认构建选项：
 
@@ -134,6 +165,8 @@ cmake --version
 
 MySQL Server 用于运行服务端数据库。编译阶段使用的是 MySQL 客户端开发库，运行阶段需要 MySQL 服务。
 
+如果你现在只是想先把程序编译出来，而你手里已经有完整的 `dep-windows-lib` 依赖包，那么这一节可以暂时跳过，等程序编译成功后再安装 MySQL Server 也可以。
+
 推荐安装：
 
 ```text
@@ -193,7 +226,7 @@ D:\WYTurtle\deps\ACE_wrappers
 
 准备步骤：
 
-1. 下载 ACE 源码包。
+1. 下载 ACE 源码包。建议优先使用 `ACE 7.1.3`。
 2. 解压到 `D:\WYTurtle\deps\ACE_wrappers`。
 3. 确认存在：
 
@@ -201,6 +234,8 @@ D:\WYTurtle\deps\ACE_wrappers
 D:\WYTurtle\deps\ACE_wrappers\ace
 D:\WYTurtle\deps\ACE_wrappers\ACE_vs2019.sln
 ```
+
+`ACE 7.1.3` 的 Windows 工程通常就是 `ACE_vs2019.sln`。如果你下载的 ACE 包里解决方案名称略有不同，打开它自带的 `.sln` 文件即可。
 
 4. 使用 Visual Studio 2022 打开：
 
@@ -241,7 +276,7 @@ D:\WYTurtle\deps\dep-windows-lib
 ```text
 D:\WYTurtle\deps\dep-windows-lib
 ├─ x64_release
-│  ├─ libmysql.lib
+│  ├─ libmySQL.lib
 │  ├─ libmySQL.dll
 │  ├─ libssl.lib
 │  ├─ libssl-1_1-x64.dll
@@ -251,7 +286,7 @@ D:\WYTurtle\deps\dep-windows-lib
 │  ├─ OptickCore.lib
 │  └─ OptickCore.dll
 └─ x64_Debug
-   ├─ libmysql.lib
+   ├─ libmySQL.lib
    ├─ libmySQL.dll
    ├─ libssl.lib
    ├─ libssl-1_1-x64.dll
@@ -267,6 +302,8 @@ Debug 使用 x64_Debug
 ```
 
 初次编译建议使用 `RelWithDebInfo`，这样只要 `x64_release` 完整即可。
+
+有些依赖包里 MySQL 导入库文件名会显示成 `libmysql.lib`，也有些会显示成 `libmySQL.lib`。在 Windows 下两种大小写通常都能正常使用，不必为了大小写单独折腾。
 
 头文件默认位置：
 
@@ -306,13 +343,13 @@ mkdir D:\WYTurtle\build\relwithdebinfo
 ### 3. 配置 CMake
 
 ```bat
-cmake -S "D:\WYTurtle\source" -B "D:\WYTurtle\build\relwithdebinfo" -G "NMake Makefiles" ^
-  -DCMAKE_BUILD_TYPE=RelWithDebInfo ^
+cmake -S "D:\WYTurtle\source" -B "D:\WYTurtle\build\relwithdebinfo" -G "Visual Studio 17 2022" -A x64 ^
   -DCMAKE_INSTALL_PREFIX="D:/WYTurtle/server" ^
   -DACE_ROOT="D:/WYTurtle/deps/ACE_wrappers" ^
   -DWINDOWS_DEP_LIB_DIR="D:/WYTurtle/deps/dep-windows-lib" ^
   -DUSE_LUA=ON ^
-  -DUSE_SCRIPTS=ON
+  -DUSE_SCRIPTS=ON ^
+  -DUSE_STD_MALLOC=ON
 ```
 
 配置成功时会看到：
@@ -333,10 +370,18 @@ Build files have been written to: D:/WYTurtle/build/relwithdebinfo
 
 不要使用旧式 `-DPREFIX=...`。
 
+上面这条命令使用的是 `Visual Studio 17 2022` 生成器，因此不需要依赖 `CMAKE_BUILD_TYPE` 来选择模式。真正的模式选择发生在编译阶段的 `--config RelWithDebInfo`。
+
+如果你自己改用 `NMake Makefiles`、`Ninja` 这类单配置生成器，再额外加上：
+
+```text
+-DCMAKE_BUILD_TYPE=RelWithDebInfo
+```
+
 ### 4. 编译并安装
 
 ```bat
-cmake --build "D:\WYTurtle\build\relwithdebinfo" --target INSTALL
+cmake --build "D:\WYTurtle\build\relwithdebinfo" --config RelWithDebInfo --target INSTALL --parallel
 ```
 
 第一次完整编译可能需要 3 到 10 分钟。编译完成后，输出会安装到：
@@ -344,6 +389,15 @@ cmake --build "D:\WYTurtle\build\relwithdebinfo" --target INSTALL
 ```text
 D:\WYTurtle\server
 ```
+
+如果你希望不同构建模式彼此隔离，也可以把 `CMAKE_INSTALL_PREFIX` 改成类似下面这样的目录：
+
+```text
+D:/WYTurtle/server/RelWithDebInfo
+D:/WYTurtle/build/relwithdebinfo/bin/RelWithDebInfo
+```
+
+只要最终把 exe、配置文件和运行 DLL 放在同一个运行目录里即可。下面的示例继续使用 `D:\WYTurtle\server`，只是为了让目录更容易看懂。
 
 成功后应包含：
 
@@ -372,8 +426,19 @@ copy /y "D:\WYTurtle\deps\dep-windows-lib\x64_release\OptickCore.dll" "D:\WYTurt
 RelWithDebInfo 模式建议同时复制 PDB：
 
 ```bat
-copy /y "D:\WYTurtle\build\relwithdebinfo\bin\mangosd.pdb" "D:\WYTurtle\server\"
-copy /y "D:\WYTurtle\build\relwithdebinfo\bin\realmd.pdb" "D:\WYTurtle\server\"
+copy /y "D:\WYTurtle\build\relwithdebinfo\bin\RelWithDebInfo\mangosd.pdb" "D:\WYTurtle\server\"
+copy /y "D:\WYTurtle\build\relwithdebinfo\bin\RelWithDebInfo\realmd.pdb" "D:\WYTurtle\server\"
+```
+
+首次运行前，建议确认运行目录中至少有下面这些目录，没有就手动创建：
+
+```text
+D:\WYTurtle\server\data
+D:\WYTurtle\server\logs
+D:\WYTurtle\server\lua_scripts
+D:\WYTurtle\server\patches
+D:\WYTurtle\server\honor
+D:\WYTurtle\server\pdump
 ```
 
 ## 使用 CMake GUI 编译
@@ -401,31 +466,26 @@ D:\WYTurtle\build\relwithdebinfo
 如果弹出生成器选择：
 
 ```text
-Generator: NMake Makefiles
-Use default native compilers
-```
-
-也可以选择：
-
-```text
 Visual Studio 17 2022
 Platform: x64
 ```
 
-如果使用 Visual Studio 生成器，后续编译需要在 Visual Studio 中生成 `INSTALL` 项目。
+推荐直接使用这一组配置。它更接近本文前面给出的参考环境，也更适合新手排查问题。
 
 ### 3. 设置变量
 
 确认或新增以下变量：
 
 ```text
-CMAKE_BUILD_TYPE        RelWithDebInfo
 CMAKE_INSTALL_PREFIX    D:/WYTurtle/server
 ACE_ROOT                D:/WYTurtle/deps/ACE_wrappers
 WINDOWS_DEP_LIB_DIR     D:/WYTurtle/deps/dep-windows-lib
 USE_LUA                 ON
 USE_SCRIPTS             ON
+USE_STD_MALLOC          ON
 ```
+
+如果你用的是 `Visual Studio 17 2022` 这种多配置生成器，`CMAKE_BUILD_TYPE` 留空也是正常的。实际的 `RelWithDebInfo / Release / Debug` 模式是在编译时再选。
 
 再次点击 `Configure`，直到没有红色错误。
 
@@ -434,14 +494,6 @@ USE_SCRIPTS             ON
 点击 `Generate`。
 
 ### 5. 编译
-
-如果使用 `NMake Makefiles`：
-
-```bat
-cmake --build "D:\WYTurtle\build\relwithdebinfo" --target INSTALL
-```
-
-如果使用 `Visual Studio 17 2022`：
 
 1. 点击 CMake GUI 的 `Open Project`。
 2. Visual Studio 顶部选择 `RelWithDebInfo` 和 `x64`。
@@ -599,7 +651,7 @@ D:\WYTurtle\deps\ACE_wrappers\lib\ACE.dll
 
 如果不存在，先重新编译 ACE。
 
-### 提示找不到 libmysql.lib
+### 提示找不到 libmysql.lib / libmySQL.lib
 
 确认存在：
 
@@ -612,6 +664,8 @@ D:\WYTurtle\deps\dep-windows-lib\x64_release\libmysql.lib
 ```text
 D:\WYTurtle\deps\dep-windows-lib\x64_Debug\libmysql.lib
 ```
+
+如果你的依赖包里显示的是 `libmySQL.lib`，也属于正常情况，Windows 下通常不需要因为大小写差异单独处理。
 
 如果依赖库放在其他位置，配置 CMake 时设置：
 
