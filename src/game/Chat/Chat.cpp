@@ -534,6 +534,8 @@ ChatCommand * ChatHandler::getCommandTable()
         { "gm_ticket_template",           SEC_ADMINISTRATOR,    true,  &ChatHandler::HandleReloadGmTicketTemplatesCommand,       "", nullptr},
         { "housing",                      SEC_DEVELOPER,        true,  &ChatHandler::HandleReloadHousingCommand,                 "", nullptr},
         { "visibilities",                 SEC_DEVELOPER,        true,  &ChatHandler::HandleReloadDynamicVisibilityCommand,        "", nullptr},
+         { "eluna",                        SEC_ADMINISTRATOR,    true,  &ChatHandler::HandleReloadElunaCommand,                   "", nullptr},  
+
 
         // vmangos
         { "areatrigger_involvedrelation",SEC_ADMINISTRATOR, true,  &ChatHandler::HandleReloadQuestAreaTriggersCommand,       "", nullptr },
@@ -2435,6 +2437,19 @@ bool  ChatHandler::ExtractOptUInt32(char** args, uint32& val, uint32 defVal)
     }
 
     return ExtractUInt32(args, val);
+}
+
+bool ChatHandler::HandleReloadElunaCommand(char* /*args*/)
+{
+#ifdef USE_LUA
+    PSendSysMessage("Reloading Eluna scripts...");
+    sTurtleLuaEngine.Reload();
+    PSendSysMessage("Eluna scripts reloaded.");
+    return true;
+#else
+    PSendSysMessage("Eluna support is not compiled in.");
+    return false;
+#endif
 }
 
 /**

@@ -764,6 +764,7 @@ class ChatHandler
         bool HandleReloadGmLevelsCommand(char* args);
         bool HandleReloadGmTicketTemplatesCommand(char* args);
         bool HandleReloadDynamicVisibilityCommand(char* args);
+        bool HandleReloadElunaCommand(char* args);  // °˚ ÃÌº”’‚––
         bool HandleReloadAreaTriggerTeleportCommand(char* args);
         bool HandleMountCommand(char* args);
         bool HandleModifyTitleCommand(char* args);
